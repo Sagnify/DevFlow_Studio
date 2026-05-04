@@ -1,0 +1,1066 @@
+{
+  "settings": {
+    "framework": "Flask",
+    "database": "sqlite",
+    "orm": "SQLAlchemy",
+    "port": "5000",
+    "host": "127.0.0.1",
+    "debug": true,
+    "env": "development"
+  },
+  "nodes": [
+    {
+      "id": "task_db_1",
+      "type": "db",
+      "position": {
+        "x": 80,
+        "y": 100
+      },
+      "data": {
+        "label": "tasks",
+        "editing": false,
+        "dbType": "sql",
+        "tableName": "tasks",
+        "fields": [
+          {
+            "id": 0.1,
+            "name": "id",
+            "type": "INT",
+            "primaryKey": true,
+            "required": false,
+            "unique": true,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.2,
+            "name": "title",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.3,
+            "name": "description",
+            "type": "TEXT",
+            "primaryKey": false,
+            "required": false,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.4,
+            "name": "status",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": false,
+            "defaultValue": "pending",
+            "ref": ""
+          },
+          {
+            "id": 0.5,
+            "name": "priority",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": false,
+            "defaultValue": "medium",
+            "ref": ""
+          },
+          {
+            "id": 0.6,
+            "name": "due_date",
+            "type": "DATETIME",
+            "primaryKey": false,
+            "required": false,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.7,
+            "name": "completed_at",
+            "type": "DATETIME",
+            "primaryKey": false,
+            "required": false,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.8,
+            "name": "created_at",
+            "type": "DATETIME",
+            "primaryKey": false,
+            "required": false,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.9,
+            "name": "updated_at",
+            "type": "DATETIME",
+            "primaryKey": false,
+            "required": false,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          }
+        ],
+        "indexes": []
+      },
+      "width": 100,
+      "height": 90
+    },
+    {
+      "id": "ep_list_tasks",
+      "type": "endpoint",
+      "position": {
+        "x": 385.04869658139756,
+        "y": -6.412200860528117
+      },
+      "data": {
+        "label": "listTasks",
+        "method": "GET",
+        "route": "/tasks",
+        "editing": false,
+        "input": [
+          {
+            "id": 1.1,
+            "key": "status",
+            "val": "string",
+            "source": "query"
+          },
+          {
+            "id": 1.2,
+            "key": "priority",
+            "val": "string",
+            "source": "query"
+          }
+        ],
+        "outputFields": [
+          "sorted"
+        ]
+      },
+      "width": 162,
+      "height": 111,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 385.04869658139756,
+        "y": -6.412200860528117
+      },
+      "dragging": false
+    },
+    {
+      "id": "grp_list",
+      "type": "group",
+      "position": {
+        "x": 360,
+        "y": 240
+      },
+      "width": 390.29217948838516,
+      "height": 350.34087606978267,
+      "style": {
+        "width": 390.29217948838516,
+        "height": 350.34087606978267
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "List Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_fetch_all",
+      "type": "logic",
+      "parentNode": "grp_list",
+      "position": {
+        "x": 70.29217948838516,
+        "y": 32.93182478604348
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "fetchTasks",
+        "logicType": "Function",
+        "operation": "fetch",
+        "fetchCfg": {
+          "modelId": "task_db_1",
+          "fetchFields": [
+            "id",
+            "title",
+            "status",
+            "priority",
+            "due_date"
+          ],
+          "filters": [
+            {
+              "id": 2.1,
+              "field": "status",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "status"
+              }
+            },
+            {
+              "id": 2.2,
+              "field": "priority",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "priority"
+              }
+            }
+          ],
+          "returnMany": true
+        }
+      },
+      "width": 240,
+      "height": 115,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 430.29217948838516,
+        "y": 272.9318247860435
+      },
+      "dragging": false
+    },
+    {
+      "id": "logic_sort_tasks",
+      "type": "logic",
+      "parentNode": "grp_list",
+      "position": {
+        "x": 0,
+        "y": 188.27270085582614
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "sortTasks",
+        "logicType": "Function",
+        "operation": "utility",
+        "utilityCfg": {
+          "subType": "Sort"
+        }
+      },
+      "width": 142,
+      "height": 115,
+      "selected": true,
+      "positionAbsolute": {
+        "x": 360,
+        "y": 428.27270085582614
+      },
+      "dragging": false
+    },
+    {
+      "id": "ep_get_task",
+      "type": "endpoint",
+      "position": {
+        "x": 620,
+        "y": 140
+      },
+      "data": {
+        "label": "getTask",
+        "method": "GET",
+        "route": "/tasks/:id",
+        "editing": false,
+        "input": [
+          {
+            "id": 3.1,
+            "key": "id",
+            "val": "string",
+            "source": "path"
+          }
+        ],
+        "outputFields": [
+          "id",
+          "title",
+          "description",
+          "status",
+          "priority",
+          "due_date"
+        ]
+      },
+      "width": 162,
+      "height": 111
+    },
+    {
+      "id": "grp_get",
+      "type": "group",
+      "position": {
+        "x": 600,
+        "y": 240
+      },
+      "width": 391,
+      "height": 195,
+      "style": {
+        "width": 391,
+        "height": 195
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Get Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_fetch_one",
+      "type": "logic",
+      "parentNode": "grp_get",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "fetchTaskById",
+        "logicType": "Function",
+        "operation": "fetch",
+        "fetchCfg": {
+          "modelId": "task_db_1",
+          "fetchFields": [
+            "id",
+            "title",
+            "description",
+            "status",
+            "priority",
+            "due_date"
+          ],
+          "filters": [
+            {
+              "id": 4.1,
+              "field": "id",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "id"
+              }
+            }
+          ],
+          "returnMany": false
+        }
+      },
+      "width": 311,
+      "height": 115
+    },
+    {
+      "id": "ep_create_task",
+      "type": "endpoint",
+      "position": {
+        "x": 860,
+        "y": 140
+      },
+      "data": {
+        "label": "createTask",
+        "method": "POST",
+        "route": "/tasks",
+        "editing": false,
+        "input": [
+          {
+            "id": 5.1,
+            "key": "title",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 5.2,
+            "key": "description",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 5.3,
+            "key": "due_date",
+            "val": "string",
+            "source": "body"
+          }
+        ],
+        "outputFields": [
+          "id",
+          "title",
+          "description",
+          "due_date"
+        ]
+      },
+      "width": 162,
+      "height": 111
+    },
+    {
+      "id": "grp_create",
+      "type": "group",
+      "position": {
+        "x": 840,
+        "y": 240
+      },
+      "width": 290,
+      "height": 435,
+      "style": {
+        "width": 290,
+        "height": 435
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Create Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_val_title",
+      "type": "logic",
+      "parentNode": "grp_create",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "validateTitle",
+        "logicType": "Function",
+        "operation": "validate",
+        "validateCfg": {
+          "field": "title",
+          "rules": [
+            {
+              "id": 6.1,
+              "type": "required",
+              "ruleVal": "",
+              "onFail": "Title is required"
+            }
+          ]
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "logic_val_date_create",
+      "type": "logic",
+      "parentNode": "grp_create",
+      "position": {
+        "x": 40,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "validateDueDate",
+        "logicType": "Function",
+        "operation": "validate",
+        "validateCfg": {
+          "field": "due_date",
+          "rules": [
+            {
+              "id": 6.2,
+              "type": "is number",
+              "ruleVal": "",
+              "onFail": "Due date must be a valid date and not in the past"
+            }
+          ]
+        }
+      },
+      "width": 161,
+      "height": 115
+    },
+    {
+      "id": "logic_save_create",
+      "type": "logic",
+      "parentNode": "grp_create",
+      "position": {
+        "x": 40,
+        "y": 280
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "saveTaskCreate",
+        "logicType": "Function",
+        "operation": "save",
+        "saveCfg": {
+          "modelId": "task_db_1",
+          "saveOp": "create",
+          "mapping": {
+            "title": {
+              "mode": "upstream",
+              "val": "title"
+            },
+            "description": {
+              "mode": "upstream",
+              "val": "description"
+            },
+            "due_date": {
+              "mode": "upstream",
+              "val": "due_date"
+            }
+          }
+        }
+      },
+      "width": 210,
+      "height": 115
+    },
+    {
+      "id": "ep_update_task",
+      "type": "endpoint",
+      "position": {
+        "x": 1100,
+        "y": 140
+      },
+      "data": {
+        "label": "updateTask",
+        "method": "PUT",
+        "route": "/tasks/:id",
+        "editing": false,
+        "input": [
+          {
+            "id": 7.1,
+            "key": "id",
+            "val": "string",
+            "source": "path"
+          },
+          {
+            "id": 7.2,
+            "key": "title",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 7.3,
+            "key": "due_date",
+            "val": "string",
+            "source": "body"
+          }
+        ],
+        "outputFields": [
+          "id",
+          "title",
+          "due_date"
+        ]
+      },
+      "width": 162,
+      "height": 111
+    },
+    {
+      "id": "grp_update",
+      "type": "group",
+      "position": {
+        "x": 1080,
+        "y": 240
+      },
+      "width": 241,
+      "height": 315,
+      "style": {
+        "width": 241,
+        "height": 315
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Update Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_val_date_update",
+      "type": "logic",
+      "parentNode": "grp_update",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "validateDateUpdate",
+        "logicType": "Function",
+        "operation": "validate",
+        "validateCfg": {
+          "field": "due_date",
+          "rules": [
+            {
+              "id": 8.1,
+              "type": "is number",
+              "ruleVal": "",
+              "onFail": "Due date cannot be in the past"
+            }
+          ]
+        }
+      },
+      "width": 161,
+      "height": 115
+    },
+    {
+      "id": "logic_save_update",
+      "type": "logic",
+      "parentNode": "grp_update",
+      "position": {
+        "x": 40,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "saveTaskUpdate",
+        "logicType": "Function",
+        "operation": "save",
+        "saveCfg": {
+          "modelId": "task_db_1",
+          "saveOp": "update",
+          "mapping": {
+            "title": {
+              "mode": "upstream",
+              "val": "title"
+            },
+            "due_date": {
+              "mode": "upstream",
+              "val": "due_date"
+            }
+          }
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "ep_delete_task",
+      "type": "endpoint",
+      "position": {
+        "x": 1340,
+        "y": 140
+      },
+      "data": {
+        "label": "deleteTask",
+        "method": "DELETE",
+        "route": "/tasks/:id",
+        "editing": false,
+        "input": [
+          {
+            "id": 9.1,
+            "key": "id",
+            "val": "string",
+            "source": "path"
+          }
+        ],
+        "outputFields": [
+          "deleted"
+        ]
+      },
+      "width": 162,
+      "height": 111
+    },
+    {
+      "id": "grp_delete",
+      "type": "group",
+      "position": {
+        "x": 1320,
+        "y": 240
+      },
+      "width": 222,
+      "height": 195,
+      "style": {
+        "width": 222,
+        "height": 195
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Delete Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_delete_op",
+      "type": "logic",
+      "parentNode": "grp_delete",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "deleteTaskOp",
+        "logicType": "Function",
+        "operation": "delete",
+        "deleteCfg": {
+          "modelId": "task_db_1",
+          "filters": [
+            {
+              "id": 10.1,
+              "field": "id",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "id"
+              }
+            }
+          ]
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "ep_patch_status",
+      "type": "endpoint",
+      "position": {
+        "x": 1580,
+        "y": 140
+      },
+      "data": {
+        "label": "updateStatus",
+        "method": "PATCH",
+        "route": "/tasks/:id/status",
+        "editing": false,
+        "input": [
+          {
+            "id": 11.1,
+            "key": "id",
+            "val": "string",
+            "source": "path"
+          },
+          {
+            "id": 11.2,
+            "key": "status",
+            "val": "string",
+            "source": "body"
+          }
+        ],
+        "outputFields": [
+          "id",
+          "status",
+          "completed_at"
+        ]
+      },
+      "width": 165,
+      "height": 111
+    },
+    {
+      "id": "grp_patch",
+      "type": "group",
+      "position": {
+        "x": 1560,
+        "y": 240
+      },
+      "width": 245,
+      "height": 315,
+      "style": {
+        "width": 245,
+        "height": 315
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Patch Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_status_transform",
+      "type": "logic",
+      "parentNode": "grp_patch",
+      "position": {
+        "x": 40,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "handleCompletedAt",
+        "logicType": "Function",
+        "operation": "transform",
+        "transformCfg": {
+          "rows": [
+            {
+              "id": 12.1,
+              "inputField": "status",
+              "op": "Rename",
+              "opConfig": "completed_at",
+              "outputName": "completed_at"
+            }
+          ]
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "logic_save_status",
+      "type": "logic",
+      "parentNode": "grp_patch",
+      "position": {
+        "x": 40,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "saveStatusUpdate",
+        "logicType": "Function",
+        "operation": "save",
+        "saveCfg": {
+          "modelId": "task_db_1",
+          "saveOp": "update",
+          "mapping": {
+            "status": {
+              "mode": "upstream",
+              "val": "status"
+            },
+            "completed_at": {
+              "mode": "upstream",
+              "val": "completed_at"
+            }
+          }
+        }
+      },
+      "width": 165,
+      "height": 115
+    }
+  ],
+  "edges": [
+    {
+      "id": "flow_list_1",
+      "type": "dataflow",
+      "source": "ep_list_tasks",
+      "sourceHandle": "bottom-s",
+      "target": "logic_fetch_all",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_list_2",
+      "type": "dataflow",
+      "source": "logic_fetch_all",
+      "sourceHandle": "bottom-s",
+      "target": "logic_sort_tasks",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_list_rev",
+      "type": "dataflow",
+      "source": "logic_sort_tasks",
+      "sourceHandle": "top-s",
+      "target": "ep_list_tasks",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_get_1",
+      "type": "dataflow",
+      "source": "ep_get_task",
+      "sourceHandle": "bottom-s",
+      "target": "logic_fetch_one",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_get_rev",
+      "type": "dataflow",
+      "source": "logic_fetch_one",
+      "sourceHandle": "top-s",
+      "target": "ep_get_task",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_create_1",
+      "type": "dataflow",
+      "source": "ep_create_task",
+      "sourceHandle": "bottom-s",
+      "target": "logic_val_title",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_create_2",
+      "type": "dataflow",
+      "source": "logic_val_title",
+      "sourceHandle": "bottom-s",
+      "target": "logic_val_date_create",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_create_3",
+      "type": "dataflow",
+      "source": "logic_val_date_create",
+      "sourceHandle": "bottom-s",
+      "target": "logic_save_create",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_create_rev",
+      "type": "dataflow",
+      "source": "logic_save_create",
+      "sourceHandle": "top-s",
+      "target": "ep_create_task",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_update_1",
+      "type": "dataflow",
+      "source": "ep_update_task",
+      "sourceHandle": "bottom-s",
+      "target": "logic_val_date_update",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_update_2",
+      "type": "dataflow",
+      "source": "logic_val_date_update",
+      "sourceHandle": "bottom-s",
+      "target": "logic_save_update",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_update_rev",
+      "type": "dataflow",
+      "source": "logic_save_update",
+      "sourceHandle": "top-s",
+      "target": "ep_update_task",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_delete_1",
+      "type": "dataflow",
+      "source": "ep_delete_task",
+      "sourceHandle": "bottom-s",
+      "target": "logic_delete_op",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_delete_rev",
+      "type": "dataflow",
+      "source": "logic_delete_op",
+      "sourceHandle": "top-s",
+      "target": "ep_delete_task",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_patch_1",
+      "type": "dataflow",
+      "source": "ep_patch_status",
+      "sourceHandle": "bottom-s",
+      "target": "logic_status_transform",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_patch_2",
+      "type": "dataflow",
+      "source": "logic_status_transform",
+      "sourceHandle": "bottom-s",
+      "target": "logic_save_status",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_patch_rev",
+      "type": "dataflow",
+      "source": "logic_save_status",
+      "sourceHandle": "top-s",
+      "target": "ep_patch_status",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "conn_list_db",
+      "source": "logic_fetch_all",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    },
+    {
+      "id": "conn_get_db",
+      "source": "logic_fetch_one",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    },
+    {
+      "id": "conn_create_db",
+      "source": "logic_save_create",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    },
+    {
+      "id": "conn_update_db",
+      "source": "logic_save_update",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    },
+    {
+      "id": "conn_delete_db",
+      "source": "logic_delete_op",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    },
+    {
+      "id": "conn_patch_db",
+      "source": "logic_save_status",
+      "sourceHandle": "left-s",
+      "target": "task_db_1",
+      "targetHandle": "right-t"
+    }
+  ],
+  "projectState": 2
+}
