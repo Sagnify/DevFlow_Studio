@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
-import { ArrowLeft, Database, Globe, GitBranch, X, Layers, Play, Square, Package, CheckCircle2, Hammer, Undo2, Redo2, RefreshCw } from "lucide-react";
+import { ArrowLeft, Database, Globe, GitBranch, X, Layers, Play, Square, Package, CheckCircle2, Hammer, Undo2, Redo2, RefreshCw, Code2, Layout } from "lucide-react";
 
 const PROJECT_STATE = { EMPTY: 0, BUILDING: 1, READY: 2, RUNNING: 3 };
 
@@ -27,11 +27,15 @@ import ReactFlow, {
 import "reactflow/dist/style.css";
 import "./App.css";
 import Welcome from "./Welcome";
+import SetupScreen from "./SetupScreen";
 import Terminal from "./Terminal";
 import Sidebar from "./Sidebar";
 import FloatingNodePicker from "./FloatingNodePicker";
 import NodeConfigModal from "./NodeConfigModal";
 import FileExplorer from "./FileExplorer";
+import CodeEditor from "./CodeEditor";
+import TitleBar from "./TitleBar";
+import AgentConfigModal from "./AgentConfigModal";
 import { api } from "./api";
 
 const onRenameRef = { current: null };
@@ -369,6 +373,26 @@ function resolveLogicOutputs(data) {
 function normalizeAgentEndpointOutputs(nodes, edges) {
   return nodes.map((node) => {
     if (node.type !== "endpoint") return node;
+
+    // If manual output mode, use manual output fields instead of logic nodes
+    if (node.data.outputMode === "manual") {
+      const manualOutput = node.data.manualOutput || {};
+      let outputFields = [];
+      if (manualOutput.type === "kv") {
+        outputFields = (manualOutput.fields || []).map(f => f.key).filter(Boolean);
+      } else if (manualOutput.type === "json") {
+        try {
+          const parsed = JSON.parse(manualOutput.content || "{}");
+          outputFields = Object.keys(parsed);
+        } catch {
+          outputFields = [];
+        }
+      }
+      return outputFields.length
+        ? { ...node, data: { ...node.data, outputFields } }
+        : node;
+    }
+
     const responseLogicNodes = edges
       .filter((e) => e.target === node.id && (e.data?.flowDir === "reverse" || e.data?.flowDir === undefined))
       .map((e) => nodes.find((n) => n.id === e.source))
@@ -607,10 +631,14 @@ function validateGraph(nodes, edges) {
   const realNodes = nodes.filter((n) => n.type !== "group");
   const connectedIds = new Set(edges.flatMap((e) => [e.source, e.target]));
 
-  // Isolated nodes
-  const isolated = realNodes.filter((n) => !connectedIds.has(n.id));
-  if (isolated.length > 0)
-    issues.push({ severity: "warn", title: "Isolated nodes", detail: `${isolated.map((n) => `"${n.data.label}"`).join(", ")} ${isolated.length === 1 ? "has" : "have"} no connections and won't be included in the build.` });
+  // Isolated nodes (but allow endpoints with manual output mode)
+  const isolated = realNodes.filter((n) => !connectedIds.has(n.id) && !(n.type === "endpoint" && n.data.outputMode === "manual"));
+  if (isolated.length > 0) {
+    const nonEndpoints = isolated.filter((n) => n.type !== "endpoint");
+    if (nonEndpoints.length > 0) {
+      issues.push({ severity: "warn", title: "Isolated nodes", detail: `${nonEndpoints.map((n) => `"${n.data.label}"`).join(", ")} ${nonEndpoints.length === 1 ? "has" : "have"} no connections and won't be included in the build.` });
+    }
+  }
 
   // Endpoints with no route
   const noRoute = realNodes.filter((n) => n.type === "endpoint" && !n.data.route?.trim());
@@ -650,7 +678,7 @@ function diffGraph(prevJson, currentNodes, currentEdges) {
   return { schemaChanged, logicChanged };
 }
 
-function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson, onStateChange, nodes, edges, onOpenSettings, termOpen, termHeight }) {
+const BuildButton = React.forwardRef(({ projectPath, projectState, hasChanges, lastBuiltGraphJson, onStateChange, nodes, edges, onOpenSettings, termOpen, termHeight, onRecordChange, onPreBuildRecord }, ref) => {
   const [building, setBuilding] = useState(false);
   const [logs, setLogs] = useState([]);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -678,6 +706,67 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
     if (cfg.framework && !window.electronAPI?.readProjectSettings?.(projectPath)) {
       window.electronAPI?.saveProjectSettings?.(projectPath, cfg);
     }
+
+    // Record local changes before build - calculate proper diff
+    if (onPreBuildRecord && hasChanges && lastBuiltGraphJson) {
+      // Parse previous graph and calculate actual diff
+      let added = [], modified = [], deleted = [];
+      try {
+        const prev = JSON.parse(lastBuiltGraphJson);
+        const prevNodes = prev.nodes || [];
+        const prevEdges = prev.edges || [];
+        const currNodeMap = Object.fromEntries(nodes.map(n => [n.id, n]));
+        const prevNodeMap = Object.fromEntries(prevNodes.map(n => [n.id, n]));
+        const currEdgeSet = new Set(edges.map(e => e.id));
+        const prevEdgeSet = new Set(prevEdges.map(e => e.id));
+
+        // Find added and modified nodes
+        nodes.forEach(n => {
+          if (!prevNodeMap[n.id]) {
+            added.push({ type: "node", label: n.data?.label || n.id });
+          } else if (JSON.stringify(n.data) !== JSON.stringify(prevNodeMap[n.id].data)) {
+            modified.push({ type: "node", label: n.data?.label || n.id });
+          }
+        });
+
+        // Find deleted nodes
+        prevNodes.forEach(n => {
+          if (!currNodeMap[n.id]) {
+            deleted.push({ type: "node", label: n.data?.label || n.id });
+          }
+        });
+      } catch (e) { console.error("Failed to calculate diff:", e); }
+
+      const diff = { added, modified, deleted, edges: { added: edges.length } };
+      const addedCount = added.length;
+      const modifiedCount = modified.length;
+      const deletedCount = deleted.length;
+      const edgeCount = edges.length;
+
+      // Create detailed message
+      let detailMsg = [];
+      if (addedCount > 0) detailMsg.push(`+${addedCount} added`);
+      if (modifiedCount > 0) detailMsg.push(`~${modifiedCount} updated`);
+      if (deletedCount > 0) detailMsg.push(`-${deletedCount} removed`);
+      if (edgeCount > 0) detailMsg.push(`${edgeCount} connections`);
+
+      const message = detailMsg.length > 0
+        ? `Updated project (${detailMsg.join(", ")})`
+        : (migrateOnly ? "Database migration" : "Updated project");
+
+      onPreBuildRecord({
+        timestamp: Date.now(),
+        message,
+        diff,
+      });
+    } else if (onPreBuildRecord && !hasChanges) {
+      // No changes - it's a rebuild
+      onPreBuildRecord({
+        timestamp: Date.now(),
+        message: "Rebuilt project",
+        diff: { added: [], modified: [], deleted: [], edges: { added: edges.length } },
+      });
+    }
     const hasDbNodes = nodes.some((n) => n.type === "db");
     const graphIssues = validateGraph(nodes, edges);
     const noFramework = !cfg.framework;
@@ -696,6 +785,10 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
     setPreflightOpen(true);
   };
 
+  React.useImperativeHandle(ref, () => ({
+    build: handleBuildClick
+  }));
+
   const startMigrate = async (cfg) => {
     setPreflightOpen(false);
     setLogs([]);
@@ -713,6 +806,7 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
     await window.electronAPI?.buildProject(projectPath, cfg.framework, { nodes, edges }, cfg);
     await window.electronAPI?.migrateProject(projectPath, cfg.framework, cfg);
     window.electronAPI?.offBuildProgress();
+    onRecordChange(`Migrated database schema`, nodes, edges);
     setBuilding(false);
     setBuildResult(hasError ? "error" : "success");
   };
@@ -733,19 +827,21 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
     });
     await window.electronAPI?.buildProject(projectPath, cfg.framework, { nodes, edges }, cfg);
     window.electronAPI?.offBuildProgress();
+    onRecordChange(`Updated project with changes`, nodes, edges);
     setBuilding(false);
     setBuildResult(hasError ? "error" : "success");
   };
 
   const isBuilding = projectState === PROJECT_STATE.BUILDING || building;
   const isDone     = projectState >= PROJECT_STATE.READY;
-  const showUpdate = isDone && hasChanges && !building;
+  const showUpdate = isDone && hasChanges && !isBuilding;
   const showBuild  = !isDone && !isBuilding;
+  const showRebuild = isDone && !hasChanges && !isBuilding && !building;
   const hasErrors  = issues.some((i) => i.severity === "error");
   const cfg        = getSettings();
 
   // Label for the update button based on what changed
-  const updateLabel = migrateOnly ? "Migrate DB" : "Update Project";
+  const updateLabel = migrateOnly ? "Migrate DB" : "Update Changes";
   const updateColor = migrateOnly ? "#059669" : "#d97706";
   const updateGlow  = migrateOnly ? "#05966944" : "#d9770644";
   const updateBorder = migrateOnly ? "#05966988" : "#d9770688";
@@ -754,7 +850,7 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
   return (
     <>
       {/* Floating build / logs button */}
-      <div style={{ position: "fixed", bottom: termOpen ? termHeight + 16 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, transition: "bottom 0.2s cubic-bezier(0.4,0,0.2,1)" }}>
+      <div style={{ position: "fixed", bottom: termOpen ? termHeight + 48 : 24, left: "50%", transform: "translateX(-50%)", zIndex: 60, display: "flex", flexDirection: "column", alignItems: "center", gap: 8, transition: "bottom 0.18s cubic-bezier(0.4,0,0.2,1)" }}>
         {(showBuild || showUpdate) && (
           <button onClick={handleBuildClick} disabled={building}
             onMouseEnter={(e) => { if (!building) { e.currentTarget.style.transform = "translateY(-2px) scale(1.03)"; e.currentTarget.style.boxShadow = showUpdate ? `0 8px 32px ${updateColor}66, 0 0 0 1px ${updateColor}88` : "0 8px 32px #7c3aed66, 0 0 0 1px #7c3aed88"; }}}
@@ -775,7 +871,7 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
         )}
         {(isDone || building) && (
           <div style={{ display: "flex", gap: 6 }}>
-            {isDone && !showUpdate && !building && (
+            {showRebuild && (
               <button onClick={handleBuildClick}
                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 14px", borderRadius: 8,
                   background: "#1a1d27", border: "1px solid #2e303a", color: "#6b7280",
@@ -894,7 +990,7 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
 
       {/* Build log panel */}
       {logsOpen && (
-        <div style={{ position: "fixed", bottom: termOpen ? termHeight + 56 : 80, left: "50%", transform: "translateX(-50%)", width: 520, maxHeight: 320,
+        <div style={{ position: "fixed", bottom: termOpen ? termHeight + 88 : 80, left: "50%", transform: "translateX(-50%)", width: 520, maxHeight: 320,
           background: "#0c0e14", border: `1px solid ${buildResult === "success" ? "#05966944" : buildResult === "error" ? "#dc262644" : "#1e2030"}`, borderRadius: 10,
           boxShadow: "0 16px 48px rgba(0,0,0,0.6)", zIndex: 60, display: "flex", flexDirection: "column", overflow: "hidden",
           transition: "border-color 0.3s" }}>
@@ -936,7 +1032,7 @@ function BuildButton({ projectPath, projectState, hasChanges, lastBuiltGraphJson
       )}
     </>
   );
-}
+});
 
 function EdgeContextMenu({ x, y, edge, onClose, onFlip, onDelete }) {
   useEffect(() => {
@@ -981,7 +1077,10 @@ function EdgeContextMenu({ x, y, edge, onClose, onFlip, onDelete }) {
 }
 
 function AppInner() {
-  const { screenToFlowPosition } = useReactFlow();
+  const { screenToFlowPosition, zoomIn, zoomOut, fitView } = useReactFlow();
+  const [setupComplete, setSetupComplete] = useState(null); // null = checking, true/false
+  const [agentConfigModal, setAgentConfigModal] = useState(null);
+  const buildButtonRef = useRef(null);
   const [project, setProject] = useState(null);
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
@@ -1000,11 +1099,16 @@ function AppInner() {
   const [projectState, setProjectState] = useState(PROJECT_STATE.EMPTY);
   const [hasChanges, setHasChanges] = useState(false);
   const lastBuiltGraphRef = useRef(null);
+  const [changeHistory, setChangeHistory] = useState([]); // Track all changes with timestamps
   const [sidebarPanel, setSidebarPanel] = useState(null);
   const [testNodeId, setTestNodeId] = useState(null);
   const [dragOverGroup, setDragOverGroup] = useState(null);
   const [explorerOpen, setExplorerOpen] = useState(false);
   const [agentBuilding, setAgentBuilding] = useState(false);
+  const [editorMode, setEditorMode] = useState("visual"); // "visual" or "code"
+  const [hasCodeFiles, setHasCodeFiles] = useState(false);
+  const [codeEditorOpenFiles, setCodeEditorOpenFiles] = useState([]); // Track open files in code editor
+  const [codeEditorSelectedFile, setCodeEditorSelectedFile] = useState(null);
 
   const edgesRef = useRef(edges);
   const nodesRef = useRef(nodes);
@@ -1013,6 +1117,16 @@ function AppInner() {
   serverRunningRef.current = serverRunning;
   nodesMapRef.current = Object.fromEntries(nodes.map((n) => [n.id, n]));
   dragOverGroupRef.current = dragOverGroup;
+
+  // Callback to record local changes
+  const handleChangeRecorded = useCallback((change) => {
+    if (!project?.path) return;
+    const key = `devflow_local_changes_${project.path.replace(/[\\/]/g, '_')}`;
+    const existing = JSON.parse(localStorage.getItem(key) || "[]");
+    existing.push(change);
+    const trimmed = existing.slice(-50);
+    localStorage.setItem(key, JSON.stringify(trimmed));
+  }, [project?.path]);
 
   const openProject = (proj) => {
     const graph = api.openProject(proj.path);
@@ -1023,10 +1137,71 @@ function AppInner() {
     // Never restore BUILDING — means a previous build crashed
     setProjectState(detected === PROJECT_STATE.BUILDING ? PROJECT_STATE.EMPTY : detected);
     if (detected >= PROJECT_STATE.READY) {
-      lastBuiltGraphRef.current = JSON.stringify({ nodes: graph.nodes, edges: graph.edges });
+      // Strip selection before storing
+      const nodesNoSel = graph.nodes.map(n => ({ ...n, selected: false }));
+      const edgesNoSel = graph.edges.map(e => ({ ...e, selected: false }));
+      lastBuiltGraphRef.current = JSON.stringify({ nodes: nodesNoSel, edges: edgesNoSel });
     }
     localStorage.setItem("devflow_last_project", proj.path);
   };
+
+  // Helper to strip selection from nodes/edges for comparison
+  const stripSelection = (nodes, edges) => ({
+    nodes: nodes.map(n => ({ ...n, selected: false })),
+    edges: edges.map(e => ({ ...e, selected: false })),
+  });
+
+  // Helper to compare graph ignoring selection (for hasChanges detection)
+  const hasGraphChanged = (currentNodes, currentEdges, lastBuilt) => {
+    if (!lastBuilt) return false;
+    try {
+      const last = JSON.parse(lastBuilt);
+      if (currentNodes.length !== last.nodes?.length || currentEdges.length !== last.edges?.length) return true;
+
+      // Compare nodes ignoring 'selected' property
+      for (let i = 0; i < currentNodes.length; i++) {
+        const cur = currentNodes[i];
+        const prev = last.nodes?.[i];
+        if (!prev) return true;
+        // Compare position
+        if (cur.position?.x !== prev.position?.x || cur.position?.y !== prev.position?.y) return true;
+        // Compare data (config)
+        if (JSON.stringify(cur.data) !== JSON.stringify(prev.data)) return true;
+      }
+
+      // Compare edges ignoring 'selected' property
+      for (let i = 0; i < currentEdges.length; i++) {
+        const cur = currentEdges[i];
+        const prev = last.edges?.[i];
+        if (!prev) return true;
+        if (cur.source !== prev.source || cur.target !== prev.target || cur.type !== prev.type) return true;
+      }
+
+      return false;
+    } catch {
+      return true;
+    }
+  };
+
+  // Synchronize hasChanges with current graph vs lastBuiltGraph
+  useEffect(() => {
+    if (projectState < PROJECT_STATE.READY) {
+      // Only track changes after project is READY
+      setHasChanges(false);
+      return;
+    }
+
+    if (!lastBuiltGraphRef.current) {
+      // No reference to compare against yet
+      setHasChanges(false);
+      return;
+    }
+
+    // Compare current graph with lastBuilt (ignoring selection)
+    const changed = hasGraphChanged(nodesRef.current, edgesRef.current, lastBuiltGraphRef.current);
+
+    setHasChanges(changed);
+  }, [projectState, nodes, edges]);
 
   // Watch project folder — if generated files disappear, reset to EMPTY
   useEffect(() => {
@@ -1047,11 +1222,51 @@ function AppInner() {
     return () => clearInterval(interval);
   }, [project]);
 
+  const openFileInCodeEditor = useCallback((file) => {
+    if (!file || file.isDir) return;
+    setCodeEditorSelectedFile(file);
+    setCodeEditorOpenFiles((prev) => (
+      prev.some((openFile) => openFile.path === file.path) ? prev : [...prev, file]
+    ));
+    setEditorMode("code");
+    setHasCodeFiles(true);
+  }, []);
+
   useEffect(() => {
     const handler = () => setTermOpen(true);
     window.electronAPI?.onBuildOpenTerminal(handler);
     return () => window.electronAPI?.offBuildOpenTerminal?.();
   }, []);
+
+  // Check if setup is complete
+  useEffect(() => {
+    const config = localStorage.getItem("devflow_config");
+    if (config) {
+      const parsed = JSON.parse(config);
+      setSetupComplete(parsed.setupComplete || false);
+    } else {
+      setSetupComplete(false);
+    }
+  }, []);
+
+  // Check for code files when project changes
+  useEffect(() => {
+    if (!project?.path || !window.electronAPI?.readDir) {
+      setHasCodeFiles(false);
+      return;
+    }
+    try {
+      const files = window.electronAPI.readDir(project.path);
+      const codeExtensions = [".py", ".js", ".jsx", ".ts", ".tsx", ".json", ".html", ".css", ".sql", ".yaml", ".yml"];
+      const hasCode = (items) => items.some(item => {
+        if (item.isDir && item.children) return hasCode(item.children);
+        return codeExtensions.some(ext => item.name.endsWith(ext));
+      });
+      setHasCodeFiles(hasCode(files));
+    } catch {
+      setHasCodeFiles(false);
+    }
+  }, [project]);
 
   useEffect(() => {
     const lastPath = localStorage.getItem("devflow_last_project");
@@ -1106,11 +1321,110 @@ function AppInner() {
     });
   }, [project]);
 
+  const calculateDiff = useCallback((fromGraph, toGraph) => {
+    const fromNodes = (fromGraph?.nodes || []).reduce((acc, n) => ({ ...acc, [n.id]: n }), {});
+    const toNodes = (toGraph?.nodes || []).reduce((acc, n) => ({ ...acc, [n.id]: n }), {});
+    const fromEdges = (fromGraph?.edges || []).reduce((acc, e) => ({ ...acc, [e.id]: e }), {});
+    const toEdges = (toGraph?.edges || []).reduce((acc, e) => ({ ...acc, [e.id]: e }), {});
+
+    const added = [];
+    const modified = [];
+    const deleted = [];
+
+    // Find added/modified nodes
+    Object.entries(toNodes).forEach(([id, node]) => {
+      if (!fromNodes[id]) {
+        added.push({ type: "node", id, label: node.data.label, nodeType: node.type });
+      } else if (JSON.stringify(fromNodes[id]) !== JSON.stringify(node)) {
+        modified.push({ type: "node", id, label: node.data.label, nodeType: node.type });
+      }
+    });
+
+    // Find deleted nodes
+    Object.entries(fromNodes).forEach(([id, node]) => {
+      if (!toNodes[id]) {
+        deleted.push({ type: "node", id, label: node.data.label, nodeType: node.type });
+      }
+    });
+
+    // Find added/modified edges
+    Object.entries(toEdges).forEach(([id, edge]) => {
+      if (!fromEdges[id]) {
+        const srcNode = toNodes[edge.source]?.data?.label || edge.source;
+        const tgtNode = toNodes[edge.target]?.data?.label || edge.target;
+        added.push({ type: "edge", id, label: `${srcNode} → ${tgtNode}` });
+      } else if (JSON.stringify(fromEdges[id]) !== JSON.stringify(edge)) {
+        const srcNode = toNodes[edge.source]?.data?.label || edge.source;
+        const tgtNode = toNodes[edge.target]?.data?.label || edge.target;
+        modified.push({ type: "edge", id, label: `${srcNode} → ${tgtNode}` });
+      }
+    });
+
+    // Find deleted edges
+    Object.entries(fromEdges).forEach(([id, edge]) => {
+      if (!toEdges[id]) {
+        const srcNode = fromNodes[edge.source]?.data?.label || edge.source;
+        const tgtNode = fromNodes[edge.target]?.data?.label || edge.target;
+        deleted.push({ type: "edge", id, label: `${srcNode} → ${tgtNode}` });
+      }
+    });
+
+    return { added, modified, deleted };
+  }, []);
+
+  const summarizeChange = useCallback((message, diff) => {
+    const addedNodes = diff.added.filter((item) => item.type === "node");
+    const addedEdges = diff.added.filter((item) => item.type === "edge");
+    const modifiedNodes = diff.modified.filter((item) => item.type === "node");
+    const modifiedEdges = diff.modified.filter((item) => item.type === "edge");
+    const deletedNodes = diff.deleted.filter((item) => item.type === "node");
+    const deletedEdges = diff.deleted.filter((item) => item.type === "edge");
+    const parts = [];
+
+    if (addedNodes.length) parts.push(`added ${addedNodes.length} node${addedNodes.length === 1 ? "" : "s"}`);
+    if (modifiedNodes.length) parts.push(`updated ${modifiedNodes.length} node${modifiedNodes.length === 1 ? "" : "s"}`);
+    if (deletedNodes.length) parts.push(`removed ${deletedNodes.length} node${deletedNodes.length === 1 ? "" : "s"}`);
+    if (addedEdges.length) parts.push(`created ${addedEdges.length} connection${addedEdges.length === 1 ? "" : "s"}`);
+    if (modifiedEdges.length) parts.push(`adjusted ${modifiedEdges.length} connection${modifiedEdges.length === 1 ? "" : "s"}`);
+    if (deletedEdges.length) parts.push(`removed ${deletedEdges.length} connection${deletedEdges.length === 1 ? "" : "s"}`);
+
+    if (!parts.length) return `${message} completed with no graph-level changes detected.`;
+    const sample = [...addedNodes, ...modifiedNodes, ...deletedNodes].slice(0, 3).map((item) => item.label).filter(Boolean);
+    const focus = sample.length ? ` Focus: ${sample.join(", ")}.` : "";
+    return `Change Brief Agent: ${parts.join(", ")}.${focus}`;
+  }, []);
+
+  const recordChange = useCallback((message, nodes, edges) => {
+    const timestamp = new Date();
+    const graph = { nodes, edges };
+    const previousGraph = changeHistory.length > 0 ? changeHistory[changeHistory.length - 1].graph : null;
+    const diff = previousGraph ? calculateDiff(previousGraph, graph) : { added: [], modified: [], deleted: [] };
+    const changeCount = diff.added.length + diff.modified.length + diff.deleted.length;
+
+    if (changeCount === 0 && changeHistory.length > 0) return; // No actual changes
+
+    const change = {
+      id: `change-${Date.now()}`,
+      message,
+      timestamp,
+      graph,
+      diff,
+      changeCount,
+      summary: summarizeChange(message, diff),
+      agent: "Change Brief Agent",
+    };
+
+    setChangeHistory((h) => [...h, change]);
+  }, [changeHistory, calculateDiff, summarizeChange]);
+
   const saveProjectState = useCallback((newState) => {
     setProjectState(newState);
     if (newState === PROJECT_STATE.READY) {
-      lastBuiltGraphRef.current = JSON.stringify({ nodes: nodesRef.current, edges: edgesRef.current });
+      const stripped = stripSelection(nodesRef.current, edgesRef.current);
+      lastBuiltGraphRef.current = JSON.stringify(stripped);
       setHasChanges(false);
+      // Record the build as a change
+      recordChange(`Built project`, nodesRef.current, edgesRef.current);
     }
     if (project) api.saveGraph(project.path, { nodes: nodesRef.current, edges: edgesRef.current, projectState: newState });
   }, [project]);
@@ -1237,31 +1551,51 @@ function AppInner() {
     };
     const cmd = commands[cfg.framework] || `flask run`;
     setTermOpen(true);
+    
+    // Spawn dedicated server terminal
+    window.dispatchEvent(new CustomEvent("spawn-terminal", { 
+      detail: { id: "server", title: "Server Output", readOnly: true } 
+    }));
+    
     setServerRunning(true);
     saveProjectState(PROJECT_STATE.RUNNING);
+    
+    // Start PTY with dedicated "server" ID
+    window.electronAPI?.pty?.start?.(project?.path, "server");
+    
     setTimeout(() => {
-      window.electronAPI?.pty?.input(cmd + "\r");
-    }, 300);
+      window.electronAPI?.pty?.input(cmd + "\r", "server");
+    }, 500);
   }, [project, saveProjectState]);
 
   const stopServer = useCallback(() => {
-    window.electronAPI?.pty?.input("\x03");
+    window.electronAPI?.pty?.input("\x03", "server");
     setServerRunning(false);
     saveProjectState(PROJECT_STATE.READY);
   }, [saveProjectState]);
 
   // Sync run button with actual terminal process state
   useEffect(() => {
-    const onData = (e) => {
+    const onData = (payload) => {
       if (!serverRunningRef.current) return;
-      const clean = e.detail.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
+      if (payload.id !== "server") return; // Only listen to server terminal
+      
+      const clean = payload.data.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "");
       if (/KeyboardInterrupt|Terminated|Quit|SIGTERM|Stopped|exited|\[process exited\]/i.test(clean)) {
         setServerRunning(false);
         saveProjectState(PROJECT_STATE.READY);
       }
     };
-    window.addEventListener("pty-data", onData);
-    return () => window.removeEventListener("pty-data", onData);
+    
+    if (window.electronAPI?.pty?.onData) {
+      window.electronAPI.pty.onData(onData);
+    }
+    
+    return () => {
+      if (window.electronAPI?.pty?.offData) {
+        window.electronAPI.pty.offData(onData);
+      }
+    };
   }, [saveProjectState]);
 
   const onAgentGraph = useCallback(async (graph) => {
@@ -1404,6 +1738,7 @@ function AppInner() {
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey && e.key === "`") { setTermOpen((o) => !o); return; }
+      if (e.ctrlKey && e.key === "e") { e.preventDefault(); setExplorerOpen((o) => !o); return; }
       if (e.ctrlKey && e.key === "z" && !e.shiftKey) { e.preventDefault(); undo(); return; }
       if (e.ctrlKey && (e.key === "y" || (e.key === "z" && e.shiftKey))) { e.preventDefault(); redo(); return; }
       if (["INPUT", "TEXTAREA", "SELECT"].includes(e.target.tagName)) return;
@@ -1433,6 +1768,86 @@ function AppInner() {
     return () => window.removeEventListener("keydown", onKey);
   }, [deleteNode, cutNode, copyNode, pasteNode, groupSelected, undo, redo]);
 
+  const handleMenuAction = useCallback((action) => {
+    switch (action) {
+      case "new-project": setProject(null); localStorage.removeItem("devflow_last_project"); setSetupComplete(false); break;
+      case "open-project": window.electronAPI?.pickFolder().then(p => { if (p) { const pr = api.openProject(p); setProject(pr); localStorage.setItem("devflow_last_project", p); setSetupComplete(true); }}); break;
+      case "save-project": save(nodesRef.current, edgesRef.current); break;
+      case "close-project": setProject(null); localStorage.removeItem("devflow_last_project"); setSetupComplete(false); break;
+      case "preferences": setSidebarPanel("settings"); break;
+      
+      case "undo": undo(); break;
+      case "redo": redo(); break;
+      case "find": window.dispatchEvent(new CustomEvent("menu-action-find")); break;
+      case "replace": window.dispatchEvent(new CustomEvent("menu-action-replace")); break;
+      case "configure-node": {
+        const selNode = nodesRef.current.find(n => n.selected);
+        if (selNode) setConfigNode(selNode);
+        break;
+      }
+      case "group-nodes": groupSelected(); break;
+      case "ungroup-nodes": {
+        const grp = nodesRef.current.find(n => n.selected && n.type === "group");
+        if (grp) ungroupNode(grp.id);
+        break;
+      }
+      case "reverse-edge": {
+        const selEdge = edgesRef.current.find(e => e.selected);
+        if (selEdge) {
+          const updated = edgesRef.current.map(e => e.id === selEdge.id ? { ...e, data: { ...e.data, flowDir: e.data?.flowDir === "reverse" ? "forward" : "reverse" } } : e);
+          commit(nodesRef.current, updated);
+        }
+        break;
+      }
+
+      case "insert-endpoint": case "insert-logic": case "insert-db": {
+        const typeMap = { "insert-endpoint": "Endpoint", "insert-logic": "Logic", "insert-db": "DB" };
+        const label = typeMap[action];
+        const id = String(Date.now());
+        const data = { label, editing: false, fields: [] };
+        commit([...nodesRef.current, { id, position: { x: Math.random() * 400 + 100, y: Math.random() * 400 + 100 }, data, type: label.toLowerCase() === "db" ? "db" : label.toLowerCase() === "endpoint" ? "endpoint" : "logic" }], edgesRef.current);
+        break;
+      }
+
+      case "toggle-terminal": setTermOpen(o => !o); break;
+      case "toggle-code-mode": setEditorMode(m => m === "code" ? "visual" : "code"); break;
+      case "toggle-explorer": setExplorerOpen(o => !o); break;
+      case "toggle-source-control": setSidebarPanel(p => p === "source" ? null : "source"); break;
+      case "zoom-in": zoomIn(); break;
+      case "zoom-out": zoomOut(); break;
+      case "zoom-reset": fitView(); break;
+
+      case "build-project": buildButtonRef.current?.build(); break;
+      case "migrate-db": {
+        const cfg = window.electronAPI?.readProjectSettings?.(project?.path) || JSON.parse(localStorage.getItem(`devflow_settings_${project?.path}`) || "{}");
+        if (cfg.framework && !window.electronAPI?.readProjectSettings?.(project?.path)) {
+          window.electronAPI?.saveProjectSettings?.(project?.path, cfg);
+        }
+        setTermOpen(true);
+        window.electronAPI?.migrateProject(project?.path, cfg.framework, cfg).then(res => {
+          if (res.ok) setProjectState(PROJECT_STATE.READY);
+        });
+        break;
+      }
+      case "run-server": startServer(); break;
+      case "stop-server": stopServer(); break;
+      case "test-endpoint": {
+        const ep = nodesRef.current.find(n => n.selected && n.type === "endpoint");
+        if (ep) { setTestNodeId(ep.id); setSidebarPanel("tester"); }
+        break;
+      }
+
+      case "config-agent-autofixer":
+      case "config-agent-graph":
+      case "config-agent-brief":
+        setAgentConfigModal(action);
+        break;
+
+      case "welcome-screen": setProject(null); localStorage.removeItem("devflow_last_project"); setSetupComplete(false); break;
+      case "about": break;
+    }
+  }, [project, undo, redo, commit, save, startServer, stopServer, groupSelected, ungroupNode, zoomIn, zoomOut, fitView]);
+
   if (loading) return (
     <div style={{ width: "100vw", height: "100vh", background: "#0f1117", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 16 }}>
       <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="1.5"><polygon points="12 2 21.39 6.5 21.39 17.5 12 22 2.61 17.5 2.61 6.5"/></svg>
@@ -1442,22 +1857,93 @@ function AppInner() {
     </div>
   );
 
-  if (!project) return <Welcome onOpen={openProject} />;
+  // Show setup screen first time
+  if (setupComplete === null) return (
+    <div style={{ width: "100vw", height: "100vh", background: "#0f1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ width: 32, height: 32, border: "2px solid #2e303a", borderTopColor: "#7c3aed", borderRadius: "50%", animation: "devflow-spin 0.8s linear infinite" }} />
+    </div>
+  );
+
+  if (setupComplete === false) {
+    return <SetupScreen onComplete={() => setSetupComplete(true)} />;
+  }
+
+  if (!project) return <Welcome onOpen={openProject} onOpenExisting={(path) => {
+    // Check for .devflow file
+    const devflowPath = path + "/.devflow";
+    const hasDevflow = window.electronAPI?.pathExists ? window.electronAPI.pathExists(devflowPath) : api.pathExists(devflowPath);
+    if (!hasDevflow) {
+      alert("This project can't be edited using the visual editor.\n\nThe selected folder doesn't contain a .devflow file. Please create a new project or select a project created with DevFlow Studio.");
+      return;
+    }
+    // Open the existing project
+    const proj = { name: path.split(/[\\/]/).pop(), path, lastOpened: Date.now() };
+    openProject(proj);
+  }} />;
+
+  const moduleGap = 12;
+  const topInset = 46;
+  const topbarHeight = 40;
+  const workspaceTop = topInset + topbarHeight + moduleGap;
+  const sidebarReserve = sidebarPanel ? (sidebarPanel === "tester" ? 420 : 340) : 40;
+  const workspaceRight = sidebarReserve + moduleGap * 2;
+  const workspaceBottom = termOpen ? termHeight + moduleGap * 2 : moduleGap;
 
   return (
-    <div style={{ width: "100vw", height: "100vh", overflow: "hidden", background: "#0f1117", display: "flex", flexDirection: "column" }}>
+    <div style={{ width: "100vw", height: "100vh", overflow: "hidden", background: "#0b0d12" }}>
+      <TitleBar 
+        onAction={handleMenuAction} 
+        appState={{ 
+          isCodeMode: editorMode === "code", 
+          hasCodeFiles, 
+          termOpen, 
+          explorerOpen, 
+          sourceControlOpen: sidebarPanel === "source",
+          selectedEdgeCount: edges.filter(e => e.selected).length
+        }} 
+      />
+      {agentConfigModal && <AgentConfigModal agentAction={agentConfigModal} onClose={() => setAgentConfigModal(null)} />}
+      
       {/* Topbar */}
-      <div style={{ height: 40, flexShrink: 0, background: "#1a1d27", borderBottom: "1px solid #2e303a", display: "flex", alignItems: "center", padding: "0 16px", zIndex: 10, gap: 8 }}>
+      <div style={{ position: "fixed", top: topInset, left: moduleGap, right: moduleGap, height: topbarHeight, background: "rgba(20,22,32,0.94)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, boxShadow: "0 10px 32px rgba(0,0,0,0.28)", display: "flex", alignItems: "center", padding: "0 14px", zIndex: 42, gap: 8 }}>
         <IconBtn icon={ArrowLeft} title="Back to Projects" onClick={() => { setProject(null); localStorage.removeItem("devflow_last_project"); }} />
-        <span style={{ color: "#7c3aed", fontWeight: 700, fontSize: 14, marginRight: 8, display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2"><polygon points="12 2 21.39 6.5 21.39 17.5 12 22 2.61 17.5 2.61 6.5"/></svg>
-          DevFlow
-        </span>
-        <span style={{ color: "#6b7280", fontSize: 13 }}>/</span>
-        <span style={{ color: "#f3f4f6", fontSize: 13, fontWeight: 500 }}>{project.name}</span>
-        <div style={{ width: 1, height: 16, background: "#2e303a", margin: "0 2px" }} />
-        <IconBtn icon={Undo2} title="Undo (Ctrl+Z)" onClick={undo} color={history.length ? "#9ca3af" : "#374151"} />
-        <IconBtn icon={Redo2} title="Redo (Ctrl+Y)" onClick={redo} color={future.length ? "#9ca3af" : "#374151"} />
+        <span style={{ color: "#e5e7eb", fontSize: 14, fontWeight: 600, marginLeft: 8 }}>{project.name}</span>
+
+        {/* Mode Switcher - centered with circular sides */}
+        {hasCodeFiles && (
+          <div style={{
+            position: "absolute", left: "50%", transform: "translateX(-50%)",
+            display: "flex", alignItems: "center",
+            background: "#111318", borderRadius: 20, padding: 2,
+            border: "1px solid #2e303a",
+          }}>
+            <button
+              onClick={() => setEditorMode("visual")}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "4px 14px",
+                borderRadius: 16, border: "none", cursor: "pointer",
+                background: editorMode === "visual" ? "#7c3aed" : "transparent",
+                color: editorMode === "visual" ? "#fff" : "#6b7280",
+                fontSize: 12, fontWeight: 500, transition: "all 0.2s",
+              }}
+            >
+              <Layout size={11} strokeWidth={2} /> Visual
+            </button>
+            <button
+              onClick={() => setEditorMode("code")}
+              style={{
+                display: "flex", alignItems: "center", gap: 5, padding: "4px 14px",
+                borderRadius: 16, border: "none", cursor: "pointer",
+                background: editorMode === "code" ? "#7c3aed" : "transparent",
+                color: editorMode === "code" ? "#fff" : "#6b7280",
+                fontSize: 12, fontWeight: 500, transition: "all 0.2s",
+              }}
+            >
+              <Code2 size={11} strokeWidth={2} /> Code
+            </button>
+          </div>
+        )}
+
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
           {/* Project state stepper */}
           <ProjectStateStepper
@@ -1472,7 +1958,7 @@ function AppInner() {
               <button
                 onClick={isRunning ? stopServer : startServer}
                 disabled={!canRun}
-                title={!canRun ? "Mark project as Ready before running" : ""}
+                title={canRun ? "" : "Mark project as Ready before running"}
                 style={{ display: "flex", alignItems: "center", gap: 6, padding: "0 12px", height: 28, borderRadius: 6,
                   border: `1px solid ${isRunning ? "#dc262644" : canRun ? "#05966944" : "#2e303a"}`,
                   background: isRunning ? "#1f1a1a" : canRun ? "#0a1f16" : "#111318",
@@ -1497,7 +1983,8 @@ function AppInner() {
       </div>
 
       {/* Canvas */}
-      <div style={{ flex: 1, minHeight: 0, paddingBottom: termOpen ? termHeight : 0, paddingRight: sidebarPanel ? (sidebarPanel === "tester" ? 420 : 340) : 40, transition: "padding 0.2s cubic-bezier(0.4,0,0.2,1)" }}>
+      {editorMode === "visual" && (
+      <div style={{ position: "fixed", top: workspaceTop, left: moduleGap, right: workspaceRight, bottom: workspaceBottom, minHeight: 0, background: "rgba(10,12,18,0.86)", border: "1px solid rgba(255,255,255,0.07)", borderRadius: 14, boxShadow: "0 18px 58px rgba(0,0,0,0.30)", overflow: "hidden", transition: "right 0.18s cubic-bezier(0.4,0,0.2,1), bottom 0.18s cubic-bezier(0.4,0,0.2,1)" }}>
         <ReactFlow
           nodes={nodes}
           edges={edges}
@@ -1531,6 +2018,7 @@ function AppInner() {
           <Controls />
         </ReactFlow>
       </div>
+      )}
 
       {/* Agent building overlay */}
       {agentBuilding && <div className="agent-building-overlay" />}
@@ -1652,6 +2140,7 @@ function AppInner() {
         projectPath={project?.path}
         visible={explorerOpen}
         onToggle={() => setExplorerOpen((o) => !o)}
+        onFileOpen={openFileInCodeEditor}
       />
       <FloatingNodePicker onAdd={(label, cursorPos) => {
         const id = String(Date.now());
@@ -1660,6 +2149,7 @@ function AppInner() {
         commit([...nodesRef.current, { id, position: flowPos, data: { ...data, editing: false }, type }], edgesRef.current);
       }} />
       <BuildButton
+        ref={buildButtonRef}
         projectPath={project?.path}
         projectState={projectState}
         hasChanges={hasChanges}
@@ -1670,14 +2160,43 @@ function AppInner() {
         onOpenSettings={() => setSidebarPanel("settings")}
         termOpen={termOpen}
         termHeight={termHeight}
+        onRecordChange={recordChange}
+        onPreBuildRecord={handleChangeRecorded}
       />
+      {/* Always mounted for instant switching */}
+      <div style={{ position: "fixed", top: workspaceTop, left: moduleGap, right: workspaceRight, bottom: workspaceBottom, pointerEvents: editorMode === "code" ? "auto" : "none", visibility: editorMode === "code" ? "visible" : "hidden", zIndex: editorMode === "code" ? 30 : -1, transition: "right 0.18s cubic-bezier(0.4,0,0.2,1), bottom 0.18s cubic-bezier(0.4,0,0.2,1)" }}>
+        <CodeEditor
+          projectPath={project?.path}
+          visible={editorMode === "code"}
+          onClose={() => setEditorMode("visual")}
+          openFiles={codeEditorOpenFiles}
+          selectedFile={codeEditorSelectedFile}
+          onFileSelect={(file) => {
+            setCodeEditorSelectedFile(file);
+            setCodeEditorOpenFiles((prev) => (
+              prev.some((openFile) => openFile.path === file.path) ? prev : [...prev, file]
+            ));
+          }}
+          onCloseFile={(file) => {
+            const filePath = typeof file === "string" ? file : file?.path;
+            setCodeEditorOpenFiles((prev) => {
+              const nextOpenFiles = prev.filter(f => f.path !== filePath);
+              if (codeEditorSelectedFile?.path === filePath) {
+                setCodeEditorSelectedFile(nextOpenFiles[0] || null);
+              }
+              return nextOpenFiles;
+            });
+          }}
+        />
+      </div>
       <Terminal
         open={termOpen}
         height={termHeight}
         onDragStart={handleTermDrag}
         onClose={() => setTermOpen(false)}
         projectPath={project?.path}
-        rightOffset={sidebarPanel ? (sidebarPanel === "tester" ? 420 : 340) : 40}
+        rightOffset={workspaceRight}
+        bottomOffset={moduleGap}
       />
       <Sidebar
         onAddNode={(label) => {
@@ -1694,6 +2213,8 @@ function AppInner() {
         onPanelChange={setSidebarPanel}
         testNodeId={testNodeId}
         onAgentGraph={onAgentGraph}
+        changeHistory={changeHistory}
+        onChangeRecorded={handleChangeRecorded}
       />
     </div>
   );

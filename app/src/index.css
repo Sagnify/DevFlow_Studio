@@ -53,6 +53,7 @@
 body {
   margin: 0;
   background: #0f1117;
+  overflow: hidden;
 }
 
 /* Thin desktop-style scrollbars */

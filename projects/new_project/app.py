@@ -3,7 +3,10 @@ from flask_cors import CORS
 from datetime import datetime
 import os
 from pathlib import Path
-from models import db, Tasks
+import bcrypt
+import jwt
+import os
+from models import db, Users, Tasks
 from flask_migrate import Migrate
 
 # Load .env
@@ -57,122 +60,113 @@ def handle_not_found(_err):
 def handle_server_error(_err):
     return error_response("Internal server error", "INTERNAL_ERROR", 500)
 
+@app.route("/auth/signup", methods=["POST"])
+def signup():
+    data = request.get_json() or {}
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    # createuser: save to Users
+    createuser_record = Users()
+    createuser_record.username = username
+    createuser_record.email = email
+    createuser_record.password = password
+    db.session.add(createuser_record)
+    db.session.commit()
+    createuser_result = createuser_record.to_dict()
+
+    return success_response({"id": createuser_result.get("id"), "username": createuser_result.get("username"), "email": createuser_result.get("email"), "password": createuser_result.get("password")}, "Created", 201)
+
+@app.route("/auth/login", methods=["POST"])
+def login():
+    data = request.get_json() or {}
+    username = data.get("username")
+    password = data.get("password")
+
+    # verifycredentials: basic auth
+    verifycredentials_user = Users.query.filter_by(username=username).first()
+    if not verifycredentials_user or verifycredentials_user.password != password:
+        return error_response("Invalid credentials", "INVALID_CREDENTIALS", 401)
+    verifycredentials_result = {"token": str(verifycredentials_user.id), "user": verifycredentials_user.to_dict()}
+
+    # generatetoken: advanced auth
+    hashed_password = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+    jwt_token = jwt.encode({"userId": userid, "exp": __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(seconds=86400)}, os.getenv("SECRET_KEY", "secret"), algorithm="HS256")
+    generatetoken_result = {"hashedPassword": hashed_password, "jwt": jwt_token}
+
+    return success_response({"hashedPassword": generatetoken_result.get("hashedPassword"), "jwt": generatetoken_result.get("jwt")}, "Created", 201)
+
 @app.route("/tasks", methods=["GET"])
 def listtasks():
     status = request.args.get("status")
-    priority = request.args.get("priority")
+    token = request.headers.get("token")
 
-    # fetchtasks: fetch from Tasks
+    # authuserlist: advanced auth
+    hashed_password = bcrypt.hashpw(token.encode(), bcrypt.gensalt()).decode()
+    jwt_token = jwt.encode({"userId": userid, "exp": __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(seconds=86400)}, os.getenv("SECRET_KEY", "secret"), algorithm="HS256")
+    authuserlist_result = {"hashedPassword": hashed_password, "jwt": jwt_token}
+
+    # fetchusertasks: fetch from Tasks
     query = Tasks.query
+    if userid is not None:
+        query = query.filter(Tasks.user_id == userid)
     if status is not None:
         query = query.filter(Tasks.status == status)
-    if priority is not None:
-        query = query.filter(Tasks.priority == priority)
-    fetchtasks_result = [r.to_dict() for r in query.all()]
+    fetchusertasks_result = [r.to_dict() for r in query.all()]
 
     # sorttasks: sort by due_date
-    sorttasks_items = fetchtasks_result if isinstance(fetchtasks_result, list) else [fetchtasks_result] if fetchtasks_result else []
+    sorttasks_items = fetchusertasks_result if isinstance(fetchusertasks_result, list) else [fetchusertasks_result] if fetchusertasks_result else []
     sorttasks_result = {"sorted": sorted(sorttasks_items, key=lambda x: x.get("due_date") if isinstance(x, dict) else getattr(x, "due_date", None), reverse=False)}
 
     return success_response({"sorted": sorttasks_result.get("sorted")}, "OK", 200)
-
-@app.route("/tasks/<id>", methods=["GET"])
-def gettask(id):
-    # fetchtaskbyid: fetch from Tasks
-    query = Tasks.query
-    if id is not None:
-        query = query.filter(Tasks.id == id)
-    fetchtaskbyid_result = query.first_or_404().to_dict()
-
-    return success_response({"id": fetchtaskbyid_result.get("id"), "title": fetchtaskbyid_result.get("title"), "description": fetchtaskbyid_result.get("description"), "status": fetchtaskbyid_result.get("status"), "priority": fetchtaskbyid_result.get("priority"), "due_date": fetchtaskbyid_result.get("due_date")}, "OK", 200)
 
 @app.route("/tasks", methods=["POST"])
 def createtask():
     data = request.get_json() or {}
     title = data.get("title")
     description = data.get("description")
-    due_date = data.get("due_date")
+    token = request.headers.get("token")
 
-    # validatetitle: validate title
-    if not title:
-        return error_response("Title is required", "VALIDATION_ERROR", 400)
-    validatetitle_result = {"title": title, "title_valid": True}
+    # authusercreate: advanced auth
+    hashed_password = bcrypt.hashpw(token.encode(), bcrypt.gensalt()).decode()
+    jwt_token = jwt.encode({"userId": userid, "exp": __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(seconds=86400)}, os.getenv("SECRET_KEY", "secret"), algorithm="HS256")
+    authusercreate_result = {"hashedPassword": hashed_password, "jwt": jwt_token}
 
-    # validateduedate: validate due_date
-    try:
-        due_date = parse_datetime_field(due_date, "due_date", required=False, no_past=True)
-    except ValueError as exc:
-        return error_response(str(exc), "VALIDATION_ERROR", 400)
-    validateduedate_result = {"due_date": due_date, "due_date_valid": True}
-
-    # savetaskcreate: save to Tasks
-    savetaskcreate_record = Tasks()
-    savetaskcreate_record.title = title
-    savetaskcreate_record.description = description
-    savetaskcreate_record.due_date = parse_datetime_field(due_date, "due_date", required=False, no_past=True)
-    db.session.add(savetaskcreate_record)
+    # saveusertask: save to Tasks
+    saveusertask_record = Tasks()
+    saveusertask_record.user_id = userid
+    saveusertask_record.title = title
+    saveusertask_record.description = description
+    db.session.add(saveusertask_record)
     db.session.commit()
-    savetaskcreate_result = savetaskcreate_record.to_dict()
+    saveusertask_result = saveusertask_record.to_dict()
 
-    return success_response({"id": savetaskcreate_result.get("id"), "title": savetaskcreate_result.get("title"), "description": savetaskcreate_result.get("description"), "due_date": savetaskcreate_result.get("due_date")}, "Created", 201)
-
-@app.route("/tasks/<id>", methods=["PUT"])
-def updatetask(id):
-    data = request.get_json() or {}
-    title = data.get("title")
-    due_date = data.get("due_date")
-
-    # validatedateupdate: validate due_date
-    try:
-        due_date = parse_datetime_field(due_date, "due_date", required=False, no_past=True)
-    except ValueError as exc:
-        return error_response(str(exc), "VALIDATION_ERROR", 400)
-    validatedateupdate_result = {"due_date": due_date, "due_date_valid": True}
-
-    # savetaskupdate: save to Tasks
-    savetaskupdate_record = Tasks.query.get_or_404(id)
-    savetaskupdate_record.title = title
-    savetaskupdate_record.due_date = parse_datetime_field(due_date, "due_date", required=False, no_past=True)
-    db.session.add(savetaskupdate_record)
-    db.session.commit()
-    savetaskupdate_result = savetaskupdate_record.to_dict()
-
-    return success_response({"id": savetaskupdate_result.get("id"), "title": savetaskupdate_result.get("title"), "due_date": savetaskupdate_result.get("due_date")}, "OK", 200)
+    return success_response({"id": saveusertask_result.get("id"), "user_id": saveusertask_result.get("user_id"), "title": saveusertask_result.get("title"), "description": saveusertask_result.get("description")}, "Created", 201)
 
 @app.route("/tasks/<id>", methods=["DELETE"])
 def deletetask(id):
-    # deletetaskop: delete from Tasks
+    token = request.headers.get("token")
+
+    # authuserdelete: advanced auth
+    hashed_password = bcrypt.hashpw(token.encode(), bcrypt.gensalt()).decode()
+    jwt_token = jwt.encode({"userId": userid, "exp": __import__("datetime").datetime.utcnow() + __import__("datetime").timedelta(seconds=86400)}, os.getenv("SECRET_KEY", "secret"), algorithm="HS256")
+    authuserdelete_result = {"hashedPassword": hashed_password, "jwt": jwt_token}
+
+    # deleteownedtask: delete from Tasks
     query = Tasks.query
     query = query.filter(Tasks.id == id)
-    deletetaskop_record = query.first_or_404()
-    db.session.delete(deletetaskop_record)
+    query = query.filter(Tasks.user_id == userid)
+    deleteownedtask_record = query.first_or_404()
+    db.session.delete(deleteownedtask_record)
     db.session.commit()
-    deletetaskop_result = {"deleted": True}
+    deleteownedtask_result = {"deleted": True}
 
-    return success_response({"deleted": deletetaskop_result.get("deleted")}, "OK", 200)
+    return success_response({"deleted": deleteownedtask_result.get("deleted")}, "OK", 200)
 
-@app.route("/tasks/<id>/status", methods=["PATCH"])
-def updatestatus(id):
-    data = request.get_json() or {}
-    status = data.get("status")
-
-    # handlecompletedat: transform
-    completed_at = datetime.utcnow() if status == "completed" else None
-    handlecompletedat_result = {"completed_at": completed_at}
-
-    # savestatusupdate: save to Tasks
-    savestatusupdate_record = Tasks.query.get_or_404(id)
-    savestatusupdate_record.status = status
-    savestatusupdate_record.completed_at = parse_datetime_field(completed_at, "completed_at", required=False, no_past=False)
-    if savestatusupdate_record.status == "completed" and not savestatusupdate_record.completed_at:
-        savestatusupdate_record.completed_at = datetime.utcnow()
-    if savestatusupdate_record.status != "completed":
-        savestatusupdate_record.completed_at = None
-    db.session.add(savestatusupdate_record)
-    db.session.commit()
-    savestatusupdate_result = savestatusupdate_record.to_dict()
-
-    return success_response({"id": savestatusupdate_result.get("id"), "status": savestatusupdate_result.get("status"), "completed_at": savestatusupdate_result.get("completed_at")}, "OK", 200)
+@app.route("/", methods=["GET"])
+def homeapi():
+    return success_response({"message": "This is the api for the to-do list"}, "OK", 200)
 
 if __name__ == "__main__":
     app.run(host=os.getenv("HOST", "127.0.0.1"), port=int(os.getenv("PORT", 5000)), debug=True)

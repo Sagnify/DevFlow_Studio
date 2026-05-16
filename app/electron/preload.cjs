@@ -3,6 +3,13 @@ const fs = require("fs");
 const path = require("path");
 const os = require("os");
 
+let activePtyId = "1";
+let ptyDataCallbacks = [];
+let ptyExitCallbacks = [];
+
+ipcRenderer.on("pty-data", (_, payload) => ptyDataCallbacks.forEach(cb => cb(payload)));
+ipcRenderer.on("pty-exit", (_, payload) => ptyExitCallbacks.forEach(cb => cb(payload)));
+
 const REGISTRY = path.join(os.homedir(), "DevFlowStudio", "projects.json");
 const CONFIG   = path.join(os.homedir(), "DevFlowStudio", "config.json");
 
@@ -44,6 +51,105 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ensureDir(dir);
     const graphPath = path.join(dir, ".devflow");
     fs.writeFileSync(graphPath, JSON.stringify({ nodes: [], edges: [] }, null, 2));
+    
+    // Create .gitignore file
+    const gitignoreContent = `# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+.venv
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.sublime-project
+*.sublime-workspace
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+logs/
+
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+migrations/versions/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build
+dist/
+build/
+*.egg-info/
+
+# Cache
+*.cache
+.cache/
+
+# DevFlow specific
+.devflow
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+`;
+    const gitignorePath = path.join(dir, ".gitignore");
+    fs.writeFileSync(gitignorePath, gitignoreContent, "utf-8");
+    
     const registry = loadRegistry();
     registry.push({ name, path: dir, lastOpened: Date.now() });
     saveRegistry(registry);
@@ -100,6 +206,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
   migrateProject: (projectPath, framework, settings) =>
     ipcRenderer.invoke("migrate-project", { projectPath, framework, settings }),
+
+  agenticFix: (projectPath, framework, settings) =>
+    ipcRenderer.invoke("agentic-fix", { projectPath, framework, settings }),
 
   onBuildProgress: (cb) => {
     ipcRenderer.removeAllListeners("build-progress");
@@ -174,14 +283,28 @@ contextBridge.exposeInMainWorld("electronAPI", {
     saveRegistry(registry.filter((p) => p.path !== projectPath));
   },
 
+  windowControls: {
+    minimize: () => ipcRenderer.send("window-minimize"),
+    maximize: () => ipcRenderer.send("window-maximize"),
+    close: () => ipcRenderer.send("window-close"),
+  },
+
   pty: {
-    start: (cwd) => ipcRenderer.send("pty-start", cwd),
-    input: (data) => ipcRenderer.send("pty-input", data),
-    resize: (cols, rows) => ipcRenderer.send("pty-resize", { cols, rows }),
-    kill: () => ipcRenderer.send("pty-kill"),
-    onData: (cb) => ipcRenderer.on("pty-data", (_, data) => cb(data)),
-    onExit: (cb) => ipcRenderer.on("pty-exit", () => cb()),
-    offData: () => ipcRenderer.removeAllListeners("pty-data"),
-    offExit: () => ipcRenderer.removeAllListeners("pty-exit"),
+    setActive: (id) => { activePtyId = id; },
+    getActive: () => activePtyId,
+    start: (cwd, id) => ipcRenderer.send("pty-start", { id: id || activePtyId, cwd }),
+    input: (data, id) => ipcRenderer.send("pty-input", { id: id || activePtyId, data }),
+    resize: (cols, rows, id) => ipcRenderer.send("pty-resize", { id: id || activePtyId, cols, rows }),
+    kill: (id) => ipcRenderer.send("pty-kill", { id: id || activePtyId }),
+    onData: (cb) => { ptyDataCallbacks.push(cb); },
+    onExit: (cb) => { ptyExitCallbacks.push(cb); },
+    offData: (cb) => { 
+      if (cb) ptyDataCallbacks = ptyDataCallbacks.filter(c => c !== cb);
+      else ptyDataCallbacks = []; 
+    },
+    offExit: (cb) => { 
+      if (cb) ptyExitCallbacks = ptyExitCallbacks.filter(c => c !== cb);
+      else ptyExitCallbacks = []; 
+    },
   },
 });

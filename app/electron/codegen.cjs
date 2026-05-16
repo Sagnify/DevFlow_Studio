@@ -571,6 +571,75 @@ function buildRoute(endpointNode, allNodes, edges, dbNodes, usedNames) {
   const pathParams = inputs.filter((r) => r.source === "path");
   const paramList  = pathParams.map((r) => snakeCase(r.key)).join(", ");
 
+  // Check for manual output mode - endpoints that return static data without logic nodes
+  const outputMode = endpointNode.data.outputMode || "logic";
+  const manualOutput = endpointNode.data.manualOutput || {};
+
+  // Handle manual output mode - no logic nodes needed
+  if (outputMode === "manual") {
+    const body = [];
+
+    // Parse inputs (still allow inputs even in manual mode)
+    const bodyParams   = inputs.filter((r) => r.source === "body");
+    const queryParams  = inputs.filter((r) => !r.source || r.source === "query");
+    const headerParams = inputs.filter((r) => r.source === "header");
+
+    if (bodyParams.length) {
+      body.push(`data = request.get_json() or {}`);
+      bodyParams.forEach((r) => body.push(`${snakeCase(r.key)} = data.get("${r.key}")`));
+    }
+    queryParams.forEach((r) => {
+      const castFn = r.val === "integer" ? "int" : r.val === "number" ? "float" : "";
+      body.push(castFn
+        ? `${snakeCase(r.key)} = ${castFn}(request.args.get("${r.key}")) if request.args.get("${r.key}") is not None else None`
+        : `${snakeCase(r.key)} = request.args.get("${r.key}")`
+      );
+    });
+    headerParams.forEach((r) => body.push(`${snakeCase(r.key)} = request.headers.get("${r.key}")`));
+
+    if (body.length) body.push("");
+
+    // Build manual output response
+    let responseData;
+    if (manualOutput.type === "kv" && manualOutput.fields) {
+      const fields = manualOutput.fields
+        .filter(f => f.key)
+        .map(f => {
+          // Try to parse value as JSON (number, bool) or keep as string
+          const val = f.val || "";
+          if (val === "true") return `"${f.key}": true`;
+          if (val === "false") return `"${f.key}": false`;
+          if (val === "null" || val === "None") return `"${f.key}": None`;
+          if (/^-?\d+(\.\d+)?$/.test(val)) return `"${f.key}": ${val}`;
+          return `"${f.key}": "${val}"`;
+        })
+        .join(", ");
+      responseData = `{${fields}}`;
+    } else if (manualOutput.type === "json" && manualOutput.content) {
+      // Try to use as-is, or wrap in dict if it's a primitive
+      const content = manualOutput.content.trim();
+      try {
+        // Validate it's proper JSON
+        JSON.parse(content);
+        responseData = content;
+      } catch {
+        // If invalid JSON, treat as string
+        responseData = `"${content}"`;
+      }
+    } else {
+      responseData = "{}";
+    }
+
+    body.push(`return success_response(${responseData}, "${method === "POST" ? "Created" : "OK"}", ${method === "POST" ? 201 : 200})`);
+
+    return [
+      `@app.route("${route}", methods=["${method}"])`,
+      `def ${fnName}(${paramList}):`,
+      ...indent(body),
+    ].join("\n");
+  }
+
+  // Normal mode - get logic nodes for response
   const logicNodes = getOrderedLogicNodes(endpointNode, allNodes, edges);
 
   // Determine response variable — last logic node's result
@@ -1099,6 +1168,66 @@ function generate(graph, settings) {
       const headerParams = inputs.filter((r) => r.source === "header");
       const bodyParams   = inputs.filter((r) => r.source === "body");
 
+      // Check for manual output mode - endpoints that return static data without logic nodes
+      const outputMode = endpointNode.data.outputMode || "logic";
+      const manualOutput = endpointNode.data.manualOutput || {};
+
+      // Handle manual output mode for FastAPI
+      if (outputMode === "manual") {
+        // Build function signature params (without db dependency for manual mode)
+        const sigParts = [];
+        pathParams.forEach((r)  => sigParts.push(`${snakeCase(r.key)}: ${paramTypeMap[r.val] || "str"}`));
+        queryParams.forEach((r) => sigParts.push(`${snakeCase(r.key)}: ${paramTypeMap[r.val] || "str"} = Query(None)`));
+        headerParams.forEach((r) => sigParts.push(`${snakeCase(r.key)}: ${paramTypeMap[r.val] || "str"} = Header(None)`));
+        if (bodyParams.length) {
+          const schemaName = className(endpointNode.data.label || "endpoint") + "Body";
+          sigParts.push(`body: ${schemaName}`);
+        }
+
+        const body = [];
+
+        // Extract body fields
+        bodyParams.forEach((r) => body.push(`${snakeCase(r.key)} = body.${snakeCase(r.key)}`));
+        if (bodyParams.length) body.push("");
+
+        // Build manual output response
+        let responseData;
+        if (manualOutput.type === "kv" && manualOutput.fields) {
+          const fields = manualOutput.fields
+            .filter(f => f.key)
+            .map(f => {
+              const val = f.val || "";
+              if (val === "true") return `"${f.key}": True`;
+              if (val === "false") return `"${f.key}": False`;
+              if (val === "null") return `"${f.key}": None`;
+              if (/^-?\d+(\.\d+)?$/.test(val)) return `"${f.key}": ${val}`;
+              return `"${f.key}": "${val}"`;
+            })
+            .join(", ");
+          responseData = `{${fields}}`;
+        } else if (manualOutput.type === "json" && manualOutput.content) {
+          const content = manualOutput.content.trim();
+          try {
+            JSON.parse(content);
+            responseData = content;
+          } catch {
+            responseData = `"${content}"`;
+          }
+        } else {
+          responseData = "{}";
+        }
+
+        body.push(`return ${responseData}`);
+
+        const decorator = method === "DELETE" ? "delete" : method.toLowerCase();
+        return [
+          `@app.${decorator}("${route}")`,
+          `def ${fnName}(${sigParts.join(", ")}):`,
+          ...indent(body),
+        ].join("\n");
+      }
+
+      // Normal mode - get logic nodes for response
       const logicNodes    = getOrderedLogicNodes(endpointNode, allNodes, edges);
       const lastLogic     = logicNodes[logicNodes.length - 1];
       const responseVar   = lastLogic ? `${snakeCase(lastLogic.data.label || "step")}_result` : null;

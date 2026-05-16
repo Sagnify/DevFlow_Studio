@@ -1,22 +1,13 @@
-import React, { useEffect, useRef, useCallback } from "react";
-import { Trash2, X } from "lucide-react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { Trash2, X, Plus, TerminalSquare } from "lucide-react";
 import { Terminal as XTerm } from "@xterm/xterm";
 import { FitAddon } from "@xterm/addon-fit";
 import "@xterm/xterm/css/xterm.css";
 
-export default function Terminal({ open, height, onDragStart, onClose, projectPath, rightOffset = 40, sidebarPanel }) {
+function TermInstance({ id, isActive, projectPath, onRefReady }) {
   const containerRef = useRef(null);
   const termRef = useRef(null);
   const fitRef = useRef(null);
-
-  const fit = useCallback(() => {
-    if (!fitRef.current) return;
-    try {
-      fitRef.current.fit();
-      const pty = window.electronAPI?.pty;
-      if (pty && termRef.current) pty.resize(termRef.current.cols, termRef.current.rows);
-    } catch (_) {}
-  }, []);
 
   useEffect(() => {
     const term = new XTerm({
@@ -48,51 +39,162 @@ export default function Terminal({ open, height, onDragStart, onClose, projectPa
     termRef.current = term;
     fitRef.current = fitAddon;
 
-    // fit after paint
+    onRefReady(id, { term, fitAddon });
+
+    // Initialize backend PTY for this session
     requestAnimationFrame(() => {
-      fitAddon.fit();
       const pty = window.electronAPI?.pty;
       if (pty) {
-        pty.offData(); pty.offExit();
-        pty.onData((data) => { term.write(data); window.__xtermWrite = (d) => term.write(d); window.dispatchEvent(new CustomEvent("pty-data", { detail: data })); });
-        window.__xtermWrite = (d) => term.write(d);
-        pty.onExit(() => term.write("\r\n\x1b[31m[process exited]\x1b[0m\r\n"));
-        term.onData((data) => pty.input(data));
-        pty.start(projectPath);
+        pty.start(projectPath, id);
+        term.onData((data) => pty.input(data, id));
       } else {
         term.write("\x1b[33m⚠ PTY not available in browser mode\x1b[0m\r\n");
       }
     });
 
     return () => {
-      window.electronAPI?.pty?.offData();
-      window.electronAPI?.pty?.offExit();
-      window.electronAPI?.pty?.kill();
+      window.electronAPI?.pty?.kill(id);
       term.dispose();
+      onRefReady(id, null);
+    };
+  }, [id, projectPath]);
+
+  return (
+    <div
+      ref={containerRef}
+      style={{
+        width: "100%",
+        height: "100%",
+        display: isActive ? "block" : "none",
+        padding: "4px 0 4px 12px",
+        boxSizing: "border-box"
+      }}
+      onClick={() => isActive && termRef.current?.focus()}
+    />
+  );
+}
+
+export default function Terminal({ open, height, onDragStart, onClose, projectPath, rightOffset = 52, bottomOffset = 12 }) {
+  const [sessions, setSessions] = useState([{ id: "1", title: "bash" }]);
+  const [activeId, setActiveId] = useState("1");
+  const nextId = useRef(2);
+  const xtermRefs = useRef({});
+
+  // Global PTY Event Routing
+  useEffect(() => {
+    const pty = window.electronAPI?.pty;
+    if (!pty) return;
+
+    const handlePtyData = (payload) => {
+      const id = payload?.id || "1";
+      const data = typeof payload === "string" ? payload : payload.data;
+      const ref = xtermRefs.current[id];
+      if (ref) ref.term.write(data);
+    };
+
+    const handlePtyExit = (payload) => {
+      const id = payload?.id || "1";
+      const ref = xtermRefs.current[id];
+      if (ref) ref.term.write("\r\n\x1b[31m[process exited]\x1b[0m\r\n");
+    };
+
+    pty.onData(handlePtyData);
+    pty.onExit(handlePtyExit);
+
+    return () => {
+      pty.offData();
+      pty.offExit();
     };
   }, []);
 
+  // Global Context Bindings
   useEffect(() => {
-    if (!open) return;
-    const t = setTimeout(() => { fit(); termRef.current?.focus(); }, 50);
-    return () => clearTimeout(t);
-  }, [open, height, rightOffset, fit]);
+    // Tell preload which session is active so legacy calls target it
+    window.electronAPI?.pty?.setActive?.(activeId);
 
+    // Maintain global __xtermWrite fallback to current active terminal
+    window.__xtermWrite = (d) => {
+      const ref = xtermRefs.current[activeId];
+      if (ref) ref.term.write(d);
+    };
+  }, [activeId]);
+
+  // Fit on resize or show/activate
   useEffect(() => {
-    window.addEventListener("resize", fit);
-    return () => window.removeEventListener("resize", fit);
-  }, [fit]);
+    const fitActive = () => {
+      if (!open) return;
+      const ref = xtermRefs.current[activeId];
+      if (ref) {
+        try {
+          ref.fitAddon.fit();
+          ref.term.focus();
+          window.electronAPI?.pty?.resize?.(ref.term.cols, ref.term.rows, activeId);
+        } catch (_) {}
+      }
+    };
+    
+    const t = setTimeout(fitActive, 50);
+    window.addEventListener("resize", fitActive);
+    
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener("resize", fitActive);
+    };
+  }, [activeId, open, height]);
+
+  const handleRefReady = useCallback((id, ref) => {
+    if (ref) {
+      xtermRefs.current[id] = ref;
+      if (id === activeId && open) {
+        setTimeout(() => { try { ref.fitAddon.fit(); ref.term.focus(); } catch(_) {} }, 50);
+      }
+    } else {
+      delete xtermRefs.current[id];
+    }
+  }, [activeId, open]);
+
+  const handleAddSession = () => {
+    const id = String(nextId.current++);
+    setSessions(s => [...s, { id, title: "bash" }]);
+    setActiveId(id);
+  };
+
+  const handleRemoveSession = (id, e) => {
+    e.stopPropagation();
+    window.electronAPI?.pty?.kill(id);
+    const newSessions = sessions.filter(s => s.id !== id);
+    if (newSessions.length === 0) {
+      // If closing the last session, just recreate one and close the panel
+      setSessions([{ id: String(nextId.current++), title: "bash" }]);
+      onClose();
+    } else {
+      setSessions(newSessions);
+      if (activeId === id) setActiveId(newSessions[newSessions.length - 1].id);
+    }
+  };
+
+  const handleClearActive = () => {
+    const ref = xtermRefs.current[activeId];
+    if (ref) {
+      window.electronAPI?.pty?.kill(activeId);
+      window.electronAPI?.pty?.start(projectPath, activeId);
+      ref.term.clear();
+    }
+  };
 
   return (
     <div style={{
-      position: "fixed", left: 0, right: rightOffset, bottom: 0,
+      position: "fixed", left: 12, right: rightOffset, bottom: bottomOffset,
       height: height,
-      transform: open ? "translateY(0)" : "translateY(100%)",
-      transition: "transform 0.2s cubic-bezier(0.4,0,0.2,1)",
-      background: "#0c0e14",
-      borderTop: "1px solid #1e2030",
+      transform: open ? "translateY(0)" : "translateY(calc(100% + 24px))",
+      transition: "transform 0.18s cubic-bezier(0.4,0,0.2,1)",
+      background: "rgba(10,12,18,0.98)",
+      border: "1px solid rgba(255,255,255,0.08)",
+      borderRadius: 14,
+      boxShadow: "0 18px 58px rgba(0,0,0,0.34)",
       display: "flex", flexDirection: "column",
-      zIndex: 50,
+      zIndex: 36,
+      overflow: "hidden",
     }}>
       {/* Drag handle */}
       <div
@@ -101,31 +203,83 @@ export default function Terminal({ open, height, onDragStart, onClose, projectPa
         onMouseEnter={(e) => e.currentTarget.style.background = "#7c3aed"}
         onMouseLeave={(e) => e.currentTarget.style.background = "transparent"}
       />
+      
       {/* Header */}
-      <div style={{ height: 36, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 16px", gap: 8, borderBottom: "1px solid #1e2030" }}>
+      <div style={{ height: 36, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 16px", gap: 8, borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#7c3aed" }} />
-          <span style={{ fontSize: 11, color: "#4b5563", fontWeight: 500, letterSpacing: 0.5 }}>bash</span>
-          <span style={{ fontSize: 11, color: "#2e303a" }}>·</span>
-          <span style={{ fontSize: 11, color: "#2e303a", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{projectPath}</span>
+          <div style={{ width: 6, height: 6, borderRadius: "50%", background: "#7c3aed", boxShadow: "0 0 8px rgba(124,58,237,0.6)" }} />
+          <span style={{ fontSize: 12, color: "#e5e7eb", fontWeight: 600, letterSpacing: 0.3 }}>Terminal</span>
+          <span style={{ fontSize: 11, color: "#30363d", margin: "0 4px" }}>|</span>
+          <span style={{ fontSize: 11, color: "#6b7280", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{projectPath}</span>
         </div>
         <div style={{ marginLeft: "auto", display: "flex", gap: 2 }}>
-          <button
-            onClick={() => { window.electronAPI?.pty?.kill(); window.electronAPI?.pty?.start(projectPath); termRef.current?.clear(); }}
-            style={hdrBtn} title="Clear terminal">
-            <Trash2 size={13} strokeWidth={1.5} />
-          </button>
-          <button onClick={onClose} style={hdrBtn} title="Close">
-            <X size={13} strokeWidth={1.5} />
-          </button>
+          <button onClick={handleClearActive} style={hdrBtn} title="Clear terminal"><Trash2 size={13} strokeWidth={1.5} /></button>
+          <button onClick={onClose} style={hdrBtn} title="Close Panel"><X size={13} strokeWidth={1.5} /></button>
         </div>
       </div>
-      {/* Xterm */}
-      <div
-        ref={containerRef}
-        onClick={() => termRef.current?.focus()}
-        style={{ flex: 1, minHeight: 0, padding: "4px 0" }}
-      />
+
+      {/* Body: Sidebar + Xterm Area */}
+      <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+        
+        {/* Main Xterm Area */}
+        <div style={{ flex: 1, minWidth: 0, position: "relative" }}>
+          {sessions.map(s => (
+            <TermInstance 
+              key={s.id} 
+              id={s.id} 
+              isActive={activeId === s.id} 
+              projectPath={projectPath} 
+              onRefReady={handleRefReady} 
+            />
+          ))}
+        </div>
+
+        {/* VS Code Style Sidebar */}
+        <div style={{ 
+          width: 140, flexShrink: 0, borderLeft: "1px solid rgba(255,255,255,0.05)", 
+          background: "rgba(255,255,255,0.01)", display: "flex", flexDirection: "column" 
+        }}>
+          {/* Sidebar Tools */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", padding: "4px 8px", borderBottom: "1px solid rgba(255,255,255,0.02)" }}>
+            <button onClick={handleAddSession} style={hdrBtn} title="New Terminal">
+              <Plus size={14} strokeWidth={2} color="#a78bfa" />
+            </button>
+          </div>
+          {/* Session List */}
+          <div style={{ flex: 1, overflowY: "auto", padding: "4px 0" }}>
+            {sessions.map(s => {
+              const isActive = activeId === s.id;
+              return (
+                <div
+                  key={s.id}
+                  onClick={() => setActiveId(s.id)}
+                  style={{
+                    display: "flex", alignItems: "center", padding: "6px 12px", cursor: "pointer",
+                    background: isActive ? "rgba(124, 58, 237, 0.1)" : "transparent",
+                    borderLeft: `2px solid ${isActive ? "#7c3aed" : "transparent"}`,
+                    transition: "all 0.1s"
+                  }}
+                  onMouseEnter={(e) => { if (!isActive) e.currentTarget.style.background = "rgba(255,255,255,0.03)" }}
+                  onMouseLeave={(e) => { if (!isActive) e.currentTarget.style.background = "transparent" }}
+                >
+                  <TerminalSquare size={13} color={isActive ? "#a78bfa" : "#6b7280"} style={{ marginRight: 8, flexShrink: 0 }} />
+                  <span style={{ fontSize: 12, color: isActive ? "#e5e7eb" : "#8b949e", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {s.title}
+                  </span>
+                  <button 
+                    onClick={(e) => handleRemoveSession(s.id, e)} 
+                    style={{ ...hdrBtn, padding: 2, opacity: isActive ? 1 : 0.4 }} 
+                    title="Kill Terminal"
+                  >
+                    <Trash2 size={12} strokeWidth={1.5} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+        
+      </div>
     </div>
   );
 }
@@ -134,5 +288,6 @@ const hdrBtn = {
   background: "none", border: "none", color: "#6b7280",
   cursor: "pointer", padding: "4px", borderRadius: 4,
   display: "flex", alignItems: "center", justifyContent: "center",
-  transition: "color 0.15s",
+  transition: "all 0.15s",
 };
+

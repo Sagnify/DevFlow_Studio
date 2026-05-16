@@ -31,7 +31,7 @@ export default function FloatingNodePicker({ onAdd }) {
 
   useEffect(() => {
     const onKey = (e) => {
-      if (e.altKey && e.key === "n") {
+      if (e.shiftKey && e.code === "Space") {
         e.preventDefault();
         setPos({ x: mousePos.current.x || window.innerWidth / 2, y: mousePos.current.y || window.innerHeight / 2 });
         setQuery("");
@@ -67,7 +67,7 @@ export default function FloatingNodePicker({ onAdd }) {
           <input ref={inputRef} value={query} onChange={(e) => setQuery(e.target.value)} onKeyDown={onKeyDown}
             placeholder="Search nodes..."
             style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#f3f4f6", fontSize: 12 }} />
-          <span style={{ fontSize: 10, color: "#374151", background: "#1a1d27", padding: "2px 5px", borderRadius: 4 }}>Alt+N</span>
+          <span style={{ fontSize: 10, color: "#374151", background: "#1a1d27", padding: "2px 5px", borderRadius: 4 }}>Shift+Space</span>
         </div>
         <div style={{ padding: "6px" }}>
           {filtered.length === 0 && (

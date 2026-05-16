@@ -3,12 +3,12 @@ const path = require("path");
 const pty  = require("node-pty");
 const fs   = require("fs");
 const os   = require("os");
-const { autoFix } = require("./buildfix.cjs");
+const { autoFix, agenticFix } = require("./buildfix.cjs");
 
 const isDev = process.env.NODE_ENV === "development";
 
 let mainWindow = null;
-let ptyProcess = null;
+const ptyProcesses = new Map();
 let buildProcess = null;
 let fsWatcher = null;
 
@@ -189,11 +189,22 @@ ipcMain.handle("build-project", async (_, { projectPath, framework, graph, setti
     send("error", err.message);
     // Attempt auto-fix based on collected logs
     send("log", "");
-    send("log", "⚡ Attempting auto-fix...");
+    send("step", "Autofixer Agent");
+    send("log", "  Autofixer Agent is checking known build failure patterns...");
     const fixed = await autoFix({ logs: allLogs, projectPath, framework, settings, send });
     if (fixed) {
       send("state", "READY");
       send("done", "✓ Build complete after auto-fix!");
+      return { ok: true };
+    }
+    // All hardcoded fixes failed - try agentic AI
+    send("log", "");
+    send("step", "Autofixer Agent fallback");
+    send("log", "  Known fixes were exhausted. Handing the logs to the agentic fixer...");
+    const aiFixed = await agenticFix({ logs: allLogs, projectPath, framework, settings, send });
+    if (aiFixed) {
+      send("state", "READY");
+      send("done", "✓ Build complete after AI fix!");
       return { ok: true };
     }
     send("error", "Auto-fix could not resolve the issue. Check the logs above.");
@@ -284,11 +295,22 @@ ipcMain.handle("migrate-project", async (_, { projectPath, framework, settings }
   } catch (err) {
     send("error", err.message);
     send("log", "");
-    send("log", "⚡ Attempting auto-fix...");
+    send("step", "Autofixer Agent");
+    send("log", "  Autofixer Agent is checking known migration failure patterns...");
     const fixed = await autoFix({ logs: allLogs, projectPath, framework, settings, send });
     if (fixed) {
       send("state", "READY");
       send("done", "✓ Migration complete after auto-fix!");
+      return { ok: true };
+    }
+    // All hardcoded fixes failed - try agentic AI
+    send("log", "");
+    send("step", "Autofixer Agent fallback");
+    send("log", "  Known fixes were exhausted. Handing the logs to the agentic fixer...");
+    const aiFixed = await agenticFix({ logs: allLogs, projectPath, framework, settings, send });
+    if (aiFixed) {
+      send("state", "READY");
+      send("done", "✓ Migration complete after AI fix!");
       return { ok: true };
     }
     send("error", "Auto-fix could not resolve the issue. Check the logs above.");
@@ -309,25 +331,59 @@ ipcMain.on("unwatch-dir", () => {
   if (fsWatcher) { fsWatcher.close(); fsWatcher = null; }
 });
 
-ipcMain.on("pty-start", (_, cwd) => {
-  if (ptyProcess) { ptyProcess.kill(); ptyProcess = null; }
+// Manual AI fix trigger from UI
+ipcMain.handle("agentic-fix", async (_, { projectPath, framework, settings }) => {
+  const send = (data) => mainWindow?.webContents.send("build-progress", { type: "log", data });
+  send("Autofixer Agent: running agentic AI fix...");
+  const result = await agenticFix({ logs: [], projectPath, framework, settings, send });
+  return { ok: result };
+});
+
+ipcMain.on("pty-start", (_, { id, cwd }) => {
+  if (ptyProcesses.has(id)) {
+    ptyProcesses.get(id).kill();
+    ptyProcesses.delete(id);
+  }
   const shell = os.platform() === "win32" ? "cmd.exe" : (process.env.SHELL || "bash");
-  ptyProcess = pty.spawn(shell, [], {
+  const proc = pty.spawn(shell, [], {
     name: "xterm-color",
     cols: 80, rows: 24,
     cwd: cwd || os.homedir(),
     env: process.env,
     useConpty: false,
   });
-  ptyProcess.onData((data) => mainWindow?.webContents.send("pty-data", data));
-  ptyProcess.onExit(() => mainWindow?.webContents.send("pty-exit"));
+  ptyProcesses.set(id, proc);
+  proc.onData((data) => mainWindow?.webContents.send("pty-data", { id, data }));
+  proc.onExit(() => {
+    mainWindow?.webContents.send("pty-exit", { id });
+    ptyProcesses.delete(id);
+  });
 });
 
-ipcMain.on("pty-input", (_, data) => ptyProcess?.write(data));
+ipcMain.on("pty-input", (_, { id, data }) => {
+  const proc = ptyProcesses.get(id);
+  if (proc) proc.write(data);
+});
 
-ipcMain.on("pty-resize", (_, { cols, rows }) => ptyProcess?.resize(cols, rows));
+ipcMain.on("pty-resize", (_, { id, cols, rows }) => {
+  const proc = ptyProcesses.get(id);
+  if (proc) proc.resize(cols, rows);
+});
 
-ipcMain.on("pty-kill", () => { ptyProcess?.kill(); ptyProcess = null; });
+ipcMain.on("pty-kill", (_, { id }) => {
+  const proc = ptyProcesses.get(id);
+  if (proc) {
+    proc.kill();
+    ptyProcesses.delete(id);
+  }
+});
+
+ipcMain.on("window-minimize", () => mainWindow?.minimize());
+ipcMain.on("window-maximize", () => {
+  if (mainWindow?.isMaximized()) mainWindow?.unmaximize();
+  else mainWindow?.maximize();
+});
+ipcMain.on("window-close", () => mainWindow?.close());
 
 function createWindow() {
   const preloadPath = path.join(__dirname, "preload.cjs");
@@ -335,6 +391,7 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
+    frame: false,
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,

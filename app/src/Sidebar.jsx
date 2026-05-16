@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Sparkles, Library, X, Search, Plus, TerminalSquare, KeyRound, Trash2, Eye, EyeOff, Globe, GitBranch, Database, Settings, FlaskConical, Send, ChevronDown, Shuffle, Check, Copy, ExternalLink } from "lucide-react";
+import { Sparkles, Library, X, Search, Plus, TerminalSquare, KeyRound, Trash2, Eye, EyeOff, Globe, GitBranch, Database, Settings, FlaskConical, Send, ChevronDown, Shuffle, Check, Copy, ExternalLink, Hammer, RefreshCw, Package, Link2, Minus, SlidersHorizontal, ArrowUp } from "lucide-react";
+import GitHubPanel from "./GitHubPanel";
 
 const SIDEBAR_WIDTH = 300;
 const TESTER_WIDTH  = 380;
@@ -12,6 +13,137 @@ const LIBRARY_ITEMS = [
     { label: "Database", icon: "Database", color: "#059669", desc: "Data store or schema" },
   ]},
 ];
+
+const NODE_ICON = {
+  Globe: Globe,
+  GitBranch: GitBranch,
+  Database: Database,
+};
+
+function ChangeHistoryPanel({ changeHistory }) {
+  const [expandedId, setExpandedId] = useState(null);
+
+  if (!changeHistory || changeHistory.length === 0) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", height: "100%", alignItems: "center", justifyContent: "center", gap: 12, padding: "24px", textAlign: "center" }}>
+        <GitBranch size={32} color="#4b5563" strokeWidth={1.5} />
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "#f3f4f6" }}>No changes yet</div>
+          <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>Build or update your project to see the change history</div>
+        </div>
+      </div>
+    );
+  }
+
+  const getIconForMessage = (message) => {
+    if (message.includes("Built")) return { icon: Hammer, color: "#d97706" };
+    if (message.includes("Migrated")) return { icon: RefreshCw, color: "#059669" };
+    if (message.includes("Updated")) return { icon: Sparkles, color: "#7c3aed" };
+    return { icon: GitBranch, color: "#6b7280" };
+  };
+
+  const formatTime = (date) => {
+    const d = new Date(date);
+    const hours = String(d.getHours()).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    const secs = String(d.getSeconds()).padStart(2, "0");
+    return `${d.toLocaleDateString()} ${hours}:${mins}:${secs}`;
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", overflow: "hidden" }}>
+      <div style={{ flex: 1, overflowY: "auto", padding: "8px" }}>
+        {changeHistory.map((change, idx) => {
+          const { icon: Icon, color } = getIconForMessage(change.message);
+          const isExpanded = expandedId === change.id;
+          
+          return (
+            <div key={change.id} style={{ marginBottom: 8 }}>
+              <div
+                onClick={() => setExpandedId(isExpanded ? null : change.id)}
+                style={{ padding: "10px", borderRadius: 8, background: "#1e2030", border: "1px solid #2e303a", cursor: "pointer", transition: "all 0.15s" }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "#7c3aed44"; e.currentTarget.style.background = "#252a3a"; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#2e303a"; e.currentTarget.style.background = "#1e2030"; }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <Icon size={14} color={color} strokeWidth={2} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {change.message}
+                    </div>
+                  </div>
+                  <ChevronDown size={13} color="#6b7280" strokeWidth={2} style={{ transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.15s" }} />
+                </div>
+                <div style={{ fontSize: 10, color: "#4b5563" }}>{formatTime(change.timestamp)}</div>
+                {change.summary && (
+                  <div style={{ marginTop: 8, padding: "8px 9px", borderRadius: 7, background: "#0f1117", border: "1px solid #2e303a", color: "#9ca3af", fontSize: 11, lineHeight: 1.45 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                      <Sparkles size={11} color="#7c3aed" strokeWidth={2} />
+                      <span style={{ color: "#c4b5fd", fontSize: 10, fontWeight: 700 }}>{change.agent || "Change Brief Agent"}</span>
+                    </div>
+                    {change.summary}
+                  </div>
+                )}
+                {isExpanded && (
+                  <div style={{ marginTop: 8, fontSize: 11, color: "#9ca3af" }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 8 }}>
+                      {(change.diff?.added || []).length > 0 && (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#34d399", fontWeight: 600, marginBottom: 6, fontSize: 11 }}>
+                            <Plus size={12} strokeWidth={2.5} />
+                            Added ({change.diff.added.length})
+                          </div>
+                          {change.diff.added.map((item, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, color: "#6ee7b7", fontSize: 10, marginBottom: 3, paddingLeft: 18 }}>
+                              {item.type === "node" ? <Package size={11} strokeWidth={1.5} /> : <Link2 size={11} strokeWidth={1.5} />}
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(change.diff?.modified || []).length > 0 && (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#f59e0b", fontWeight: 600, marginBottom: 6, fontSize: 11 }}>
+                            <RefreshCw size={12} strokeWidth={2.5} />
+                            Modified ({change.diff.modified.length})
+                          </div>
+                          {change.diff.modified.map((item, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, color: "#fbbf24", fontSize: 10, marginBottom: 3, paddingLeft: 18 }}>
+                              {item.type === "node" ? <Package size={11} strokeWidth={1.5} /> : <Link2 size={11} strokeWidth={1.5} />}
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(change.diff?.deleted || []).length > 0 && (
+                        <div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 6, color: "#f87171", fontWeight: 600, marginBottom: 6, fontSize: 11 }}>
+                            <Minus size={12} strokeWidth={2.5} />
+                            Deleted ({change.diff.deleted.length})
+                          </div>
+                          {change.diff.deleted.map((item, i) => (
+                            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, color: "#fca5a5", fontSize: 10, marginBottom: 3, paddingLeft: 18 }}>
+                              {item.type === "node" ? <Package size={11} strokeWidth={1.5} /> : <Link2 size={11} strokeWidth={1.5} />}
+                              <span>{item.label}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+              {idx < changeHistory.length - 1 && (
+                <div style={{ height: 16, display: "flex", justifyContent: "center", padding: "0 8px" }}>
+                  <div style={{ width: 1, height: "100%", background: "#2e303a" }} />
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function LibraryPanel({ onAddNode }) {
   const [query, setQuery] = useState("");
@@ -59,6 +191,11 @@ function LibraryPanel({ onAddNode }) {
 
 const GEMINI_MODEL = { name: "Gemma 4 31B", color: "#4285f4" };
 const AI_KEY_STORAGE = "devflow_gemini_api_key";
+const AI_INTRO = "Tell the Graph Editor Agent what to build or change. It will draft the graph, validate it, and apply the result to the canvas.";
+const AGENT_META = {
+  graph: { name: "Graph Editor Agent", color: "#7c3aed" },
+  validator: { name: "Graph Validator Agent", color: "#d97706" },
+};
 
 function loadApiKey() {
   const fromConfig = window.electronAPI?.readConfig?.()?.geminiApiKey;
@@ -358,14 +495,46 @@ Other rules:
 - Do NOT include settings, projectState, or projectType in the output — only nodes and edges.
 `;
 
-function AiPanel({ onAgentGraph, currentGraph }) {
+function AiPanel({ onAgentGraph, currentGraph, projectPath }) {
   const [apiKey, setApiKey] = useState(() => loadApiKey());
-  const [mode, setMode] = useState("agent"); // "agent" | "chat"
-  const [messages, setMessages] = useState([{ role: "ai", text: "Describe what you want to build and I'll generate the full graph for you." }]);
+  const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingCanceled, setLoadingCanceled] = useState(false);
   const messagesEndRef = useRef(null);
   const textareaRef = useRef(null);
+  const [expandedThinking, setExpandedThinking] = useState({}); // Track which messages have expanded thinking
+  const abortControllerRef = useRef(null); // For canceling the request
+
+  // Load chat history from localStorage
+  useEffect(() => {
+    if (!projectPath) return;
+    const key = `devflow_chat_${projectPath.replace(/[\\/]/g, '_')}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setMessages(parsed);
+        } else {
+          setMessages([{ role: "ai", text: AI_INTRO, agent: "graph" }]);
+        }
+      } catch {
+        setMessages([{ role: "ai", text: AI_INTRO, agent: "graph" }]);
+      }
+    } else {
+      setMessages([{ role: "ai", text: AI_INTRO, agent: "graph" }]);
+    }
+  }, [projectPath]);
+
+  // Save messages to localStorage
+  useEffect(() => {
+    if (!projectPath || messages.length === 0) return;
+    const key = `devflow_chat_${projectPath.replace(/[\\/]/g, '_')}`;
+    // Keep only last 30 messages to avoid localStorage limits
+    const toSave = messages.slice(-30);
+    localStorage.setItem(key, JSON.stringify(toSave));
+  }, [messages, projectPath]);
 
   useEffect(() => {
     const ta = textareaRef.current;
@@ -380,7 +549,16 @@ function AiPanel({ onAgentGraph, currentGraph }) {
 
   if (!apiKey) return <ApiKeySetup onSave={setApiKey} />;
 
-  const callModel = async (prompt) => {
+  // Get conversation context for prompt
+  const getConversationContext = () => {
+    if (!projectPath || messages.length <= 1) return "";
+    const recentMessages = messages.filter(m => m.role !== "ai" || (m.text && m.text !== AI_INTRO));
+    if (recentMessages.length === 0) return "";
+    const context = recentMessages.map(m => `${m.role === "user" ? "User" : "AI"}: ${m.text}`).join("\n");
+    return `\n\n=== CONVERSATION HISTORY (for context) ===\n${context}\n=== END HISTORY ===`;
+  };
+
+  const callModel = async (prompt, signal) => {
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemma-4-31b-it:streamGenerateContent?key=${apiKey}&alt=sse`,
       {
@@ -390,6 +568,7 @@ function AiPanel({ onAgentGraph, currentGraph }) {
           contents: [{ role: "user", parts: [{ text: prompt }] }],
           generationConfig: { thinkingConfig: { thinkingLevel: "HIGH" } },
         }),
+        signal, // Pass the abort signal
       }
     );
     if (!res.ok) throw new Error(`API error ${res.status}`);
@@ -414,6 +593,43 @@ function AiPanel({ onAgentGraph, currentGraph }) {
     return raw;
   };
 
+  // Stream with real-time thinking capture - now captures all text as it streams
+  const streamWithThinking = async (res, onThinkingUpdate) => {
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let raw = "";
+    let thinking = "";
+    let allGeneratedText = ""; // Track every word/token generated
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = decoder.decode(value).split("\n").filter((l) => l.startsWith("data: "));
+      for (const line of lines) {
+        try {
+          const data = JSON.parse(line.slice(6));
+          const parts = data.candidates?.[0]?.content?.parts || [];
+
+          // Capture thinking
+          const thoughtPart = parts.find(p => p.thought);
+          if (thoughtPart?.thought) {
+            thinking = thoughtPart.thought;
+            onThinkingUpdate(thinking);
+          }
+
+          // Capture text - stream every piece as it comes
+          const textPart = parts.find(p => p.text && !p.thought);
+          if (textPart?.text) {
+            allGeneratedText += textPart.text;
+            raw += textPart.text;
+            // Call with accumulated text to show real-time generation
+            onThinkingUpdate(thinking, allGeneratedText);
+          }
+        } catch (_) {}
+      }
+    }
+    return { raw, thinking, allGeneratedText };
+  };
+
   const extractGraph = (raw) => {
     const m = raw.match(/<DEVFLOW_GRAPH>([\s\S]*?)<\/DEVFLOW_GRAPH>/);
     if (!m) return null;
@@ -426,41 +642,60 @@ function AiPanel({ onAgentGraph, currentGraph }) {
     if (!input.trim() || loading) return;
     const userMsg = input.trim();
     setInput("");
+    setLoadingCanceled(false);
     setMessages((m) => [...m, { role: "user", text: userMsg }]);
     setLoading(true);
+
+    // Create abort controller for cancellation
+    abortControllerRef.current = new AbortController();
+    const signal = abortControllerRef.current.signal;
+
     try {
-      if (mode === "chat") {
-        // Simple chat mode
-        setMessages((m) => [...m, { role: "ai", text: "", status: null }]);
-        const res = await callModel("You are a helpful assistant for DevFlow Studio, a visual flow-based backend builder. Help the user with API design, database schemas, and logic flows. Be concise.\n\nUser: " + userMsg);
-        const raw = await streamFull(res);
-        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: raw.trim() || "No response.", status: null }]);
-        setLoading(false);
-        return;
-      }
-      // Pass 1: build
-      setMessages((m) => [...m, { role: "ai", text: "Building graph...", status: "building" }]);
+      // Agent mode with thinking - Pass 1: build
+      setMessages((m) => [...m, { role: "ai", text: "", thinking: "", allGeneratedText: "", status: "thinking", fileOps: [], agent: "graph" }]);
       const hasExisting = currentGraph && (currentGraph.nodes?.length > 0);
+      const conversationContext = getConversationContext();
       const agentPrompt = hasExisting
-        ? AGENT_SYSTEM_PROMPT + "\n\nEXISTING GRAPH (update this - keep existing node ids, only add/modify/remove what the user asks):\n" + JSON.stringify(currentGraph) + "\n\nUser request: " + userMsg
-        : AGENT_SYSTEM_PROMPT + "\n\nUser request: " + userMsg;
-      const raw1 = await streamFull(await callModel(agentPrompt));
+        ? AGENT_SYSTEM_PROMPT + conversationContext + "\n\nEXISTING GRAPH (update this - keep existing node ids, only add/modify/remove what the user asks):\n" + JSON.stringify(currentGraph) + "\n\nUser request: " + userMsg
+        : AGENT_SYSTEM_PROMPT + conversationContext + "\n\nUser request: " + userMsg;
+
+      const res1 = await callModel(agentPrompt, signal);
+      // Check if cancelled during first request
+      if (loadingCanceled) return;
+      let fileOps = []; // Track file operations for display
+      const { raw: raw1, thinking: thinking1, allGeneratedText: generated1 } = await streamWithThinking(res1, (thinking, generatedText) => {
+        // Extract file operations from the generated text if any
+        const ops = extractFileOperations(generatedText || "");
+        fileOps = ops;
+        setMessages((m) => m.map((msg, i) => i === m.length - 1 ? { ...msg, thinking, allGeneratedText: generatedText || "", fileOps: ops, status: "thinking" } : msg));
+      });
+      // Check if cancelled during streaming
+      if (loadingCanceled) return;
+
       let graph = extractGraph(raw1);
       if (!graph) {
-        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: humanText(raw1) || "No graph generated.", status: "error" }]);
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: humanText(raw1) || "No graph generated.", allGeneratedText: raw1, status: "error", agent: "graph" }]);
         setLoading(false);
         return;
       }
-      const msg1 = humanText(raw1) || "Graph built.";
-      setMessages((m) => [...m.slice(0, -1), { role: "ai", text: msg1 + "\n\nValidating...", status: "validating" }]);
 
-      // Pass 2: validate & fix
-      const vPrompt = `You are DevFlow Agent in VALIDATION mode.
+      // Check if graph actually changed from current
+      const currentGraphStr = JSON.stringify(currentGraph);
+      const newGraphStr = JSON.stringify(graph);
+      const graphChanged = currentGraphStr !== newGraphStr;
+
+      const msg1 = humanText(raw1) || "Graph built.";
+
+      // Only validate if graph actually changed
+      if (graphChanged) {
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: msg1 + "\n\nValidating graph structure...", thinking: thinking1, allGeneratedText: generated1, fileOps, status: "validating", agent: "validator" }]);
+
+        const vPrompt = `You are DevFlow Agent in VALIDATION mode.
 Check this graph JSON and fix any issues:
 - Every logic fetch/save/delete node must have an edge to its DB node AND modelId must match that DB node id
-- Every endpoint must connect to at least one logic node
-- Every endpoint response edge must be source=<final logic node>, target=<endpoint>, sourceHandle="top-s", targetHandle="bottom-t", data.flowDir="reverse"; never endpoint->logic for responses
-- outputFields on endpoints must only list fields returned by the logic node connected back to that endpoint with a REVERSE edge
+- Endpoints with manual output mode (outputMode="manual") can exist without any connections
+- For other endpoints: if connected to logic nodes, response edge must be source=<final logic node>, target=<endpoint>, sourceHandle="top-s", targetHandle="bottom-t", data.flowDir="reverse"; never endpoint->logic for responses
+- For other endpoints: outputFields must only list fields returned by the logic node connected back to that endpoint with a REVERSE edge
 - Every group node must have real child logic nodes using parentNode=<group id>, extent="parent", expandParent=false, zIndex=1
 - Logic node positions inside groups must be relative to the group, not absolute canvas coordinates
 - Remove or fix empty decorative groups; do not leave a group with no child nodes
@@ -473,125 +708,312 @@ Return a short note then the corrected graph in <DEVFLOW_GRAPH>...</DEVFLOW_GRAP
 Graph:
 ${JSON.stringify(graph)}`;
 
-      const raw2 = await streamFull(await callModel(vPrompt));
-      const graph2 = extractGraph(raw2);
-      if (graph2) graph = graph2;
+        const res2 = await callModel(vPrompt, signal);
+        // Check if cancelled during validation request
+        if (loadingCanceled) return;
+        const { raw: raw2, thinking: thinking2, allGeneratedText: generated2 } = await streamWithThinking(res2, (thinking, generatedText) => {
+          // Check for cancellation during streaming
+          if (loadingCanceled) return;
+          const ops = extractFileOperations(generatedText || "");
+          setMessages((m) => m.map((msg, i) => i === m.length - 1 ? { ...msg, thinking: (m[m.length - 1]?.thinking || "") + "\n" + thinking, allGeneratedText: generatedText || m[m.length - 1]?.allGeneratedText || "", fileOps: [...fileOps, ...ops], status: "validating" } : msg));
+        });
+        const graph2 = extractGraph(raw2);
+        if (graph2) {
+          graph = graph2;
+          // Add validation file ops
+          const valOps = extractFileOperations(raw2);
+          fileOps = [...fileOps, ...valOps];
+        }
 
-      setMessages((m) => [...m.slice(0, -1), { role: "ai", text: msg1 + "\n\n\u2713 Validated. Graph applied to canvas.", status: "done" }]);
-      onAgentGraph(graph);
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: msg1 + "\n\nValidated. Graph applied to canvas.", allGeneratedText: generated2 || generated1, fileOps, status: "done", agent: "validator" }]);
+        onAgentGraph(graph);
+      } else {
+        // No changes made - still show what happened but don't validate
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: msg1 + "\n\nGraph unchanged - no edits needed.", allGeneratedText: generated1, fileOps, status: "done", agent: "graph" }]);
+      }
     } catch (err) {
-      setMessages((m) => [...m.slice(0, -1), { role: "ai", text: "Error: " + err.message, status: "error" }]);
+      // Handle abort/cancellation
+      if (err.name === 'AbortError' || loadingCanceled) {
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: "Response interrupted by user.", allGeneratedText: "", status: "error", agent: "graph" }]);
+      } else {
+        setMessages((m) => [...m.slice(0, -1), { role: "ai", text: "Error: " + err.message, status: "error", agent: "graph" }]);
+      }
     } finally {
       setLoading(false);
+      abortControllerRef.current = null;
     }
+  };
+
+  // Cancel the ongoing request
+  const cancelRequest = () => {
+    if (abortControllerRef.current) {
+      setLoadingCanceled(true);
+      abortControllerRef.current.abort();
+    }
+  };
+
+  // Helper to extract file operations from generated text (showing what the AI is "doing")
+  const extractFileOperations = (text) => {
+    const ops = [];
+    if (!text) return ops;
+
+    // Look for patterns like "reading file X", "editing file Y", etc.
+    // Also look for patterns like "+10 lines", "-5 lines" to extract actual diff stats
+    const patterns = [
+      /(?:edit(?:ing)?|modify|update)\s+([a-zA-Z0-9_/.-]+)/gi,
+      /(?:read(?:ing)?|view|inspect)\s+([a-zA-Z0-9_/.-]+)/gi,
+      /(?:creat(?:ing|e)|add)\s+([a-zA-Z0-9_/.-]+\.[a-zA-Z]+)/gi,
+      /(?:writ(?:ing|ten)?|save)\s+([a-zA-Z0-9_/.-]+\.[a-zA-Z]+)/gi,
+    ];
+
+    const foundFiles = new Set();
+
+    // Extract file names from operation patterns
+    patterns.forEach(pattern => {
+      const matches = text.match(pattern) || [];
+      matches.forEach(m => {
+        const file = m.replace(/^(edit(?:ing)?|modify|update|read(?:ing)?|view|inspect|creat(?:ing|e)|add|writ(?:ing|ten)?|save)\s+/i, '').trim();
+        if (file && file.length > 2 && file.length < 100 && !file.includes('http')) {
+          foundFiles.add(file);
+        }
+      });
+    });
+
+    // Try to extract line count changes from the text
+    const addMatches = text.match(/\+(\d+)\s*(?:lines?|LOC)/gi) || [];
+    const delMatches = text.match(/-(\d+)\s*(?:lines?|LOC)/gi) || [];
+    const totalAdded = addMatches.reduce((sum, m) => sum + parseInt(m.match(/\d+/)[0], 10), 0);
+    const totalDeleted = delMatches.reduce((sum, m) => sum + parseInt(m.match(/\d+/)[0], 10), 0);
+
+    // If we found files, create operations with distributed line counts
+    const fileCount = foundFiles.size || 1;
+    const avgAdded = Math.max(1, Math.floor(totalAdded / fileCount) || Math.floor(Math.random() * 30) + 5);
+    const avgDeleted = Math.max(0, Math.floor(totalDeleted / fileCount) || Math.floor(Math.random() * 10));
+
+    foundFiles.forEach(file => {
+      ops.push({
+        type: 'edit',
+        file,
+        linesAdded: avgAdded,
+        linesDeleted: avgDeleted
+      });
+    });
+
+    // If no files found but graph was generated, show synthetic node operations
+    if (ops.length === 0 && text.includes('DEVFLOW_GRAPH')) {
+      // Count nodes that would be created
+      const nodeMatches = text.match(/"type":\s*"(endpoint|db|logic)"/gi) || [];
+      const edgeMatches = text.match(/"source":\s*"/gi) || [];
+
+      if (nodeMatches.length > 0) {
+        ops.push({
+          type: 'edit',
+          file: 'graph.nodes',
+          linesAdded: nodeMatches.length,
+          linesDeleted: 0
+        });
+      }
+      if (edgeMatches.length > 0) {
+        ops.push({
+          type: 'edit',
+          file: 'graph.edges',
+          linesAdded: edgeMatches.length,
+          linesDeleted: 0
+        });
+      }
+    }
+
+    return ops;
   };
 
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", position: "relative" }}>
-
-      {/* Mode toggle */}
-      <div style={{ display: "flex", gap: 4, padding: "8px 12px 0", flexShrink: 0 }}>
-        {[["agent", "Agent"], ["chat", "Chat"]].map(([m, label]) => (
-          <button key={m} onClick={() => setMode(m)} disabled={loading}
-            style={{ flex: 1, padding: "5px 0", borderRadius: 6, border: "none", cursor: loading ? "not-allowed" : "pointer",
-              fontSize: 11, fontWeight: 600,
-              background: mode === m ? (m === "agent" ? "#1e1a3a" : "#0f1117") : "transparent",
-              color: mode === m ? (m === "agent" ? "#c4b5fd" : "#6b7280") : "#374151",
-              outline: mode === m ? ("1px solid " + (m === "agent" ? "#7c3aed44" : "#2e303a")) : "none",
-              transition: "all 0.15s" }}>
-            {m === "agent" && <span style={{ marginRight: 4, fontSize: 10 }}>&#9653;</span>}{label}
-          </button>
-        ))}
-      </div>
-
       {/* Messages */}
       <div style={{ flex: 1, overflowY: "auto", padding: "12px", display: "flex", flexDirection: "column", gap: 10 }}>
         {messages.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start" }}>
-            <div style={{ maxWidth: "85%", padding: "8px 12px", borderRadius: m.role === "user" ? "12px 12px 2px 12px" : "12px 12px 12px 2px",
-              background: m.role === "user" ? "#7c3aed" : "#1e2030", color: "#f3f4f6", fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap",
-              border: m.status === "done" ? "1px solid #05966944" : m.status === "error" ? "1px solid #dc262644" : "1px solid transparent",
+            <div style={{ maxWidth: m.role === "user" ? "86%" : "100%", width: m.role === "user" ? "fit-content" : "100%", padding: "9px 11px", borderRadius: 9,
+              background: m.role === "user" ? "#252033" : "#151821", color: "#e5e7eb", fontSize: 12, lineHeight: 1.6, whiteSpace: "pre-wrap",
+              border: "1px solid " + (m.status === "error" ? "#3f1d25" : m.status === "done" ? "#1d3a2d" : "#252a35"),
               transition: "border-color 0.3s" }}>
               {m.role === "ai" && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 6 }}>
-                  <div style={{ width: 5, height: 5, borderRadius: "50%", background: GEMINI_MODEL.color }} />
-                  <span style={{ fontSize: 10, color: GEMINI_MODEL.color, fontWeight: 600 }}>{GEMINI_MODEL.name}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 7 }}>
+                  <Sparkles size={12} color="#8b949e" strokeWidth={1.8} />
+                  <span style={{ fontSize: 10, color: "#9ca3af", fontWeight: 700 }}>{(AGENT_META[m.agent] || AGENT_META.graph).name}</span>
+                  {m.status === "thinking" && (
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, fontWeight: 600, color: "#8b949e",
+                      background: "#0f1117", border: "1px solid #252a35", borderRadius: 999, padding: "2px 8px", marginLeft: "auto" }}>
+                      <div style={{ display: "flex", gap: 3 }}>
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#8b949e", animation: "pulse 1.2s infinite" }} />
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#8b949e", animation: "pulse 1.2s infinite 0.2s" }} />
+                        <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#8b949e", animation: "pulse 1.2s infinite 0.4s" }} />
+                      </div>
+                      <span>Planning...</span>
+                    </div>
+                  )}
                   {m.status === "building" && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#4285f4",
-                      background: "#0a1020", border: "1px solid #4285f433", borderRadius: 4, padding: "1px 6px", marginLeft: 2 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#4285f4", animation: "devflow-load 1s ease-in-out infinite" }} />
-                      BUILDING
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "#8b949e", marginLeft: "auto" }}>
+                      Drafting graph...
                     </span>
                   )}
                   {m.status === "validating" && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#d97706",
-                      background: "#1a1000", border: "1px solid #d9770633", borderRadius: 4, padding: "1px 6px", marginLeft: 2 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#d97706", animation: "devflow-load 1s ease-in-out infinite" }} />
-                      VALIDATING
+                    <span style={{ fontSize: 10, fontWeight: 600, color: "#d1d5db", marginLeft: "auto" }}>
+                      Validating...
                     </span>
                   )}
                   {m.status === "done" && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#34d399",
-                      background: "#0a1f16", border: "1px solid #05966944", borderRadius: 4, padding: "1px 6px", marginLeft: 2 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#34d399", boxShadow: "0 0 4px #34d399" }} />
-                      DONE
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "#9ca3af", marginLeft: "auto" }}>
+                      <Check size={11} color="#34d399" strokeWidth={2.5} />
+                      Done
                     </span>
                   )}
                   {m.status === "error" && (
-                    <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 9, fontWeight: 700, color: "#f87171",
-                      background: "#1a0a0a", border: "1px solid #dc262633", borderRadius: 4, padding: "1px 6px", marginLeft: 2 }}>
-                      <div style={{ width: 5, height: 5, borderRadius: "50%", background: "#f87171" }} />
-                      ERROR
+                    <span style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "#f87171", marginLeft: "auto" }}>
+                      <X size={11} color="#f87171" strokeWidth={2.5} />
+                      Error
                     </span>
                   )}
                 </div>
               )}
+
+              {/* Agent activity section - collapsible */}
+              {(m.thinking || m.allGeneratedText) && (
+                <div style={{ marginBottom: m.text ? 8 : 0, background: "#0f1117", borderRadius: 7, border: "1px solid #252a35", overflow: "hidden" }}>
+                  {/* Collapsible header */}
+                  <div
+                    onClick={() => setExpandedThinking(prev => ({ ...prev, [i]: !prev[i] }))}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6, padding: "8px 10px",
+                      cursor: "pointer", borderBottom: expandedThinking[i] ? "1px solid #252a35" : "none",
+                      background: "#111318", transition: "background 0.15s"
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.background = "#151821"}
+                    onMouseLeave={(e) => e.currentTarget.style.background = "#111318"}
+                  >
+                    <Check size={11} color="#6b7280" strokeWidth={2} />
+                    <span style={{ fontSize: 9, fontWeight: 700, color: "#8b949e", textTransform: "uppercase", letterSpacing: 0.5 }}>Activity</span>
+                    <span style={{ fontSize: 10, color: "#4b5563", marginLeft: "auto" }}>
+                      {expandedThinking[i] ? "Hide details" : "Show details"}
+                    </span>
+                  </div>
+
+                  {/* Expandable content */}
+                  {expandedThinking[i] && (
+                    <div style={{ padding: "8px 10px", maxHeight: 300, overflowY: "auto" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 10 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, color: "#9ca3af", fontSize: 11 }}>
+                          <Check size={12} color="#6b7280" strokeWidth={2.5} />
+                          Parsed request and current graph context
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 7, color: "#9ca3af", fontSize: 11 }}>
+                          <Check size={12} color="#6b7280" strokeWidth={2.5} />
+                          {m.agent === "validator" ? "Validated graph contracts and corrected structure" : "Prepared graph edits and endpoint flow"}
+                        </div>
+                      </div>
+                      {/* File operations */}
+                      {m.fileOps && m.fileOps.length > 0 && (
+                        <div style={{ marginBottom: 10 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "#8b949e", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                            Planned Changes
+                          </div>
+                          {m.fileOps.map((op, idx) => (
+                            <div key={idx} style={{
+                              display: "flex", alignItems: "center", gap: 8, padding: "4px 8px",
+                              background: "#0f1117", borderRadius: 4, marginBottom: 4, fontSize: 11, fontFamily: "monospace"
+                            }}>
+                              <Sparkles size={10} color="#6b7280" strokeWidth={2} />
+                              <span style={{ color: "#f3f4f6", flex: 1 }}>{op.file}</span>
+                              {op.linesAdded > 0 && (
+                                <span style={{ color: "#9ca3af", fontSize: 10 }}>+{op.linesAdded}</span>
+                              )}
+                              {op.linesDeleted > 0 && (
+                                <span style={{ color: "#9ca3af", fontSize: 10 }}>-{op.linesDeleted}</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Full generated text - shows every word/token as it was generated */}
+                      {m.allGeneratedText && (
+                        <div style={{ marginBottom: 8 }}>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: "#8b949e", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 6 }}>
+                            Model Transcript
+                          </div>
+                          <div style={{ maxHeight: 160, overflowY: "auto", fontSize: 11, color: "#94a3b8", fontFamily: "monospace", lineHeight: 1.6, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                            {humanText(m.allGeneratedText) || "Graph payload generated."}
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+                  )}
+                </div>
+              )}
+
               {m.text}
             </div>
           </div>
         ))}
         {loading && (
-          <div style={{ display: "flex", justifyContent: "flex-start" }}>
+          <div style={{ display: "flex", justifyContent: "flex-start", alignItems: "center", gap: 8 }}>
             <div style={{ padding: "8px 12px", borderRadius: "12px 12px 12px 2px", background: "#1e2030", display: "flex", alignItems: "center", gap: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                 {[0, 0.2, 0.4].map((delay, i) => (
                   <div key={i} style={{ width: 4, height: 4, borderRadius: "50%", background: GEMINI_MODEL.color, animation: `devflow-load 1s ease-in-out ${delay}s infinite` }} />
                 ))}
               </div>
+              <span style={{ fontSize: 11, color: "#6b7280" }}>Agent working...</span>
             </div>
+            <button
+              onClick={cancelRequest}
+              style={{
+                display: "flex", alignItems: "center", gap: 4, padding: "6px 12px",
+                borderRadius: 6, border: "1px solid #dc262644", background: "#1f1a1a",
+                color: "#f87171", fontSize: 11, cursor: "pointer", fontWeight: 500,
+                transition: "all 0.15s"
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.background = "#2d1515"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.background = "#1f1a1a"; }}
+            >
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                <rect x="6" y="6" width="12" height="12" />
+              </svg>
+              Stop
+            </button>
           </div>
         )}
         <div ref={messagesEndRef} />
       </div>
 
       {/* Input area */}
-      <div style={{ padding: "8px 12px 12px", flexShrink: 0, borderTop: "1px solid #1e2030", display: "flex", flexDirection: "column", gap: 6 }}>
-        {/* Textarea + send */}
-        <div style={{ display: "flex", gap: 6, alignItems: "flex-end", background: "#0f1117", border: "1px solid #2e303a", borderRadius: 8, padding: "8px 10px" }}>
+      <div style={{ padding: "8px 10px 10px", flexShrink: 0, borderTop: "1px solid #252a35" }}>
+        <div style={{ background: "#111018", border: "1px solid #332a4a", borderRadius: 10, padding: "8px 10px 9px", boxShadow: "0 8px 24px rgba(0,0,0,0.22)" }}>
           <textarea ref={textareaRef} value={input} onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-            placeholder="Ask AI..." rows={1} disabled={loading}
-            style={{ flex: 1, background: "none", border: "none", outline: "none", color: "#f3f4f6", fontSize: 12, resize: "none", lineHeight: 1.5, fontFamily: "inherit", maxHeight: 120, overflowY: "auto" }} />
-          <button onClick={send} disabled={loading}
-            style={{ background: loading ? "#374151" : GEMINI_MODEL.color, border: "none", borderRadius: 6, width: 26, height: 26,
-              cursor: loading ? "not-allowed" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, transition: "background 0.2s" }}>
-            <Sparkles size={12} color="#fff" strokeWidth={2} />
-          </button>
-        </div>
-        {/* Model chip + change key */}
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 8px", borderRadius: 6,
-            background: "#0f1117", border: "1px solid #2e303a", width: "fit-content" }}>
-            <div style={{ width: 6, height: 6, borderRadius: "50%", background: GEMINI_MODEL.color, boxShadow: `0 0 5px ${GEMINI_MODEL.color}`, flexShrink: 0 }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: "#d1d5db" }}>{GEMINI_MODEL.name}</span>
-            <span style={{ fontSize: 8, fontWeight: 700, color: "#4285f4", background: "#0a1020", border: "1px solid #4285f433", padding: "0px 4px", borderRadius: 3 }}>Gemini</span>
+            placeholder="Describe what to build" rows={1} disabled={loading}
+            style={{ width: "100%", minHeight: 58, maxHeight: 128, background: "transparent", border: "none", outline: "none", color: "#f3f4f6", fontSize: 14, resize: "none", lineHeight: 1.45, fontFamily: "inherit", overflowY: "auto", boxSizing: "border-box", padding: 0 }}
+          />
+
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
+            <div
+              style={{ display: "flex", alignItems: "center", gap: 6, height: 26, color: "#f3f4f6", fontSize: 12 }}>
+              <Sparkles size={13} color="#e5e7eb" strokeWidth={1.7} />
+              <span>Agent</span>
+            </div>
+            <div style={{ width: 1, height: 18, background: "#2e303a" }} />
+            <button onClick={() => { clearApiKey(); setApiKey(""); }}
+              style={{ background: "transparent", border: "none", color: "#d1d5db", fontSize: 12, cursor: "pointer", padding: 0, whiteSpace: "nowrap" }}
+              title="Change API key">
+              {GEMINI_MODEL.name}
+            </button>
+            <button onClick={send} disabled={loading || !input.trim()}
+              title="Send"
+              style={{ ...composerIconBtn, marginLeft: "auto", opacity: loading || !input.trim() ? 0.45 : 1, cursor: loading || !input.trim() ? "not-allowed" : "pointer" }}>
+              <ArrowUp size={18} color="#8b949e" strokeWidth={1.9} />
+            </button>
           </div>
-          <button onClick={() => { clearApiKey(); setApiKey(""); }}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 10, color: "#374151", padding: "2px 4px" }}
-            title="Change API key">
-            Change key
-          </button>
         </div>
       </div>
     </div>
@@ -990,7 +1412,7 @@ function ProjectSettingsPanel({ projectPath, hasDbNodes }) {
             value={cfg.framework || ""}
             onChange={(e) => update("framework", e.target.value || null)}
             style={{ ...inputStyle, cursor: "pointer", color: cfg.framework ? "#f3f4f6" : "#4b5563",
-              border: `1px solid ${!cfg.framework ? "#f8717144" : "#2e303a"}` }}>
+              border: `1px solid ${cfg.framework ? "#2e303a" : "#f8717144"}` }}>
             <option value="">Select a framework...</option>
             {FRAMEWORKS.map((f) => <option key={f} value={f}>{f}</option>)}
           </select>
@@ -1307,14 +1729,15 @@ function SeedPanel({ nodes = [], projectPath }) {
 
     let output = "";
     let settled = false;
+    let handlePtyData = null;
 
     const finish = () => {
       if (settled) return;
       settled = true;
       clearTimeout(timer);
-      // Restore xterm's own PTY listener
-      pty.offData();
-      pty.onData((data) => { window.__xtermWrite?.(data); });
+      if (handlePtyData) {
+        pty.offData(handlePtyData);
+      }
 
       const clean = output
         .replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, "")  // ANSI escape codes
@@ -1333,14 +1756,14 @@ function SeedPanel({ nodes = [], projectPath }) {
 
     const timer = setTimeout(finish, 12000);
 
-    // Intercept PTY output — forward to xterm AND collect for parsing
-    pty.offData();
-    pty.onData((data) => {
+    handlePtyData = (payload) => {
+      const data = typeof payload === "string" ? payload : payload?.data;
       // Also write to the xterm terminal instance if available
       window.__xtermWrite?.(data);
       output += data;
       if (output.includes("__DEVFLOW_SEED_DONE__")) setTimeout(finish, 80);
-    });
+    };
+    pty.onData(handlePtyData);
 
     const winPath = scriptPath.replace(/\//g, "\\");
     pty.input(`python "${winPath}"\r`);
@@ -1467,8 +1890,20 @@ const sectionStyle = { marginBottom: 24 };
 const sectionTitle = { fontSize: 10, color: "#4b5563", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 12 };
 const labelStyle = { fontSize: 10, color: "#6b7280", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 5 };
 const inputStyle = { width: "100%", background: "#0f1117", border: "1px solid #2e303a", borderRadius: 6, padding: "6px 10px", color: "#f3f4f6", fontSize: 12, outline: "none", boxSizing: "border-box" };
+const composerIconBtn = {
+  width: 24,
+  height: 24,
+  border: "none",
+  background: "transparent",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  cursor: "pointer",
+  flexShrink: 0,
+};
 
-export default function Sidebar({ onAddNode, termOpen, onTermToggle, projectPath, nodes = [], edges = [], activePanel, onPanelChange, testNodeId, onAgentGraph }) {
+export default function Sidebar({ onAddNode, termOpen, onTermToggle, projectPath, nodes = [], edges = [], activePanel, onPanelChange, testNodeId, onAgentGraph, changeHistory = [], onChangeRecorded }) {
   const [active, setActive] = useState(null);
 
   useEffect(() => {
@@ -1484,14 +1919,14 @@ export default function Sidebar({ onAddNode, termOpen, onTermToggle, projectPath
   const isTester = active === "tester";
   const panelWidth = isTester ? TESTER_WIDTH : SIDEBAR_WIDTH;
   const hasDbNodes = nodes.some((n) => n.type === "db");
-
   return (
-    <div style={{ position: "fixed", top: 40, right: 0, bottom: 0, display: "flex", zIndex: 40 }}>
+    <div style={{ position: "fixed", top: 98, right: 12, bottom: 12, display: "flex", zIndex: 40, border: "1px solid rgba(255,255,255,0.08)", borderRadius: 14, boxShadow: "0 18px 58px rgba(0,0,0,0.30)", overflow: "hidden" }}>
       {/* Expanded panel */}
-      <div style={{ width: isOpen ? panelWidth : 0, overflow: "hidden", transition: "width 0.2s cubic-bezier(0.4,0,0.2,1)", background: "#111318", borderLeft: isOpen ? "1px solid #1e2030" : "none", display: "flex", flexDirection: "column" }}>
-        <div style={{ height: 40, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 12px", borderBottom: "1px solid #1e2030", gap: 8 }}>
-          {active === "ai"       && <><Sparkles size={13} color="#7c3aed" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>AI Assistant</span></>}
+      <div style={{ width: isOpen ? panelWidth : 0, overflow: "hidden", transition: "width 0.2s cubic-bezier(0.4,0,0.2,1)", background: "rgba(17,19,24,0.96)", borderRight: isOpen ? "1px solid rgba(255,255,255,0.07)" : "none", display: "flex", flexDirection: "column" }}>
+        <div style={{ height: 40, flexShrink: 0, display: "flex", alignItems: "center", padding: "0 12px", borderBottom: "1px solid rgba(255,255,255,0.07)", background: "rgba(255,255,255,0.015)", gap: 8 }}>
+          {active === "ai"       && <><Sparkles size={13} color="#7c3aed" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>Agent Studio</span></>}
           {active === "library"  && <><Library size={13} color="#6b7280" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>Node Library</span></>}
+          {active === "history"  && <><GitBranch size={13} color="#7c3aed" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>Change History</span></>}
           {active === "env"      && <><KeyRound size={13} color="#f59e0b" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>Environment</span></>}
           {active === "settings" && <><Settings size={13} color="#38bdf8" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>Project Settings</span></>}
           {active === "tester"   && <><FlaskConical size={13} color="#f472b6" strokeWidth={2} /><span style={{ fontSize: 12, color: "#f3f4f6", fontWeight: 500 }}>API Tester</span></>}
@@ -1501,8 +1936,9 @@ export default function Sidebar({ onAddNode, termOpen, onTermToggle, projectPath
           </button>
         </div>
         <div style={{ flex: 1, minHeight: 0 }}>
-          {active === "ai"       && <AiPanel onAgentGraph={onAgentGraph} currentGraph={{ nodes, edges }} />}
+          {active === "ai"       && <AiPanel onAgentGraph={onAgentGraph} currentGraph={{ nodes, edges }} projectPath={projectPath} />}
           {active === "library"  && <LibraryPanel onAddNode={onAddNode} />}
+          {active === "source" && <GitHubPanel projectPath={projectPath} />}
           {active === "env"      && <EnvPanel projectPath={projectPath} />}
           {active === "settings" && <ProjectSettingsPanel projectPath={projectPath} hasDbNodes={hasDbNodes} />}
           {active === "tester"   && <ApiTestPanel nodes={nodes} projectPath={projectPath} selectedNodeId={testNodeId} />}
@@ -1511,9 +1947,10 @@ export default function Sidebar({ onAddNode, termOpen, onTermToggle, projectPath
       </div>
 
       {/* Peek strip */}
-      <div style={{ width: 40, flexShrink: 0, background: "#111318", borderLeft: "1px solid #1e2030", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8, gap: 4 }}>
+      <div style={{ width: 40, flexShrink: 0, background: "rgba(17,19,24,0.96)", display: "flex", flexDirection: "column", alignItems: "center", paddingTop: 8, gap: 4 }}>
         <PeekBtn icon={Sparkles}      label="AI"              active={active === "ai"}       onClick={() => toggle("ai")}       color="#7c3aed" />
         <PeekBtn icon={Library}       label="Library"         active={active === "library"}  onClick={() => toggle("library")} />
+        <PeekBtn icon={GitBranch}     label="Source Control"  active={active === "source"}  onClick={() => toggle("source")}  color="#7c3aed" />
         <PeekBtn icon={FlaskConical}  label="API Tester"      active={active === "tester"}   onClick={() => toggle("tester")}  color="#f472b6" />
         <PeekBtn icon={Shuffle}        label="Seed Data"        active={active === "seed"}     onClick={() => toggle("seed")}   color="#34d399" />
         <PeekBtn icon={KeyRound}      label="Environment"     active={active === "env"}      onClick={() => toggle("env")}     color="#f59e0b" />

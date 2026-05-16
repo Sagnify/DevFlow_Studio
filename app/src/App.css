@@ -1,3 +1,33 @@
+/* Animations for Code Editor */
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 .counter {
   font-size: 16px;
   padding: 5px 10px;
@@ -255,6 +285,11 @@
   to { transform: rotate(360deg); }
 }
 
+@keyframes pulse {
+  0%, 100% { opacity: 0.4; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
+}
+
 @keyframes dataflow {
   from { stroke-dashoffset: 0; }
   to   { stroke-dashoffset: -32; }
@@ -296,4 +331,46 @@
   background: linear-gradient(90deg, transparent, #7c3aed, #4285f4, transparent);
   box-shadow: 0 0 12px #7c3aed, 0 0 24px #4285f4;
   animation: agent-scan 1.4s linear infinite;
+}
+
+/* ReactFlow Controls - Dark Theme */
+.react-flow__controls {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4) !important;
+  background-color: rgba(20, 22, 30, 0.6) !important;
+  backdrop-filter: blur(8px) !important;
+  border-radius: 8px !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 4px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 2px !important;
+}
+
+.react-flow__controls-button {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: none !important;
+  width: 24px !important;
+  height: 24px !important;
+  border-radius: 4px !important;
+  transition: all 0.2s ease !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  color: #9ca3af !important;
+}
+
+.react-flow__controls-button:hover {
+  background: rgba(124, 58, 237, 0.15) !important;
+}
+
+.react-flow__controls-button svg {
+  fill: #9ca3af !important;
+  width: 13px !important;
+  height: 13px !important;
+  transition: fill 0.2s ease !important;
+}
+
+.react-flow__controls-button:hover svg {
+  fill: #c4b5fd !important;
 }

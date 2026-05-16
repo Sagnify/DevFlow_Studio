@@ -1,6 +1,16 @@
 /**
  * DevFlow Studio — Build Error Recovery
  * Detects known error patterns from build/migration logs and auto-fixes them.
+ *
+ * AI Agentic Fixer Configuration:
+ * Set these environment variables to enable the AI fallback:
+ *   DEVFLOW_AI_API_KEY   - Your OpenAI/Anthropic API key
+ *   DEVFLOW_AI_ENDPOINT  - Override API endpoint (default: OpenAI)
+ *   DEVFLOW_AI_MODEL     - Model to use (default: gpt-4)
+ *
+ * Example:
+ *   export DEVFLOW_AI_API_KEY=sk-xxx
+ *   export DEVFLOW_AI_MODEL=gpt-4o
  */
 
 "use strict";
@@ -309,4 +319,198 @@ async function autoFix({ logs, projectPath, framework, settings, send }) {
   return true;
 }
 
-module.exports = { autoFix };
+// ─── Agentic AI Fallback Fixer ───────────────────────────────────────────────
+
+const https = require("https");
+const { URL } = require("url");
+
+/**
+ * Agentic AI Fixer - Called when all hardcoded fixes fail
+ * Uses AI to analyze error logs and generate/apply fixes
+ */
+
+async function agenticFix({ logs, projectPath, framework, settings, send, attemptCount = 0 }) {
+  const maxRetries = 3;
+  if (attemptCount >= maxRetries) {
+    send("log", "  [ai] Max retry attempts reached");
+    return false;
+  }
+
+  const apiKey = process.env.DEVFLOW_AI_API_KEY;
+  const apiEndpoint = process.env.DEVFLOW_AI_ENDPOINT || "https://api.openai.com/v1/chat/completions";
+  const model = process.env.DEVFLOW_AI_MODEL || "gpt-4";
+
+  if (!apiKey) {
+    send("log", "  [ai] No AI API key configured (set DEVFLOW_AI_API_KEY)");
+    return false;
+  }
+
+  send("log", `  [ai] Analyzing error with ${model}...`);
+
+  const logText = logs.join("\n").slice(-8000); // Limit to last 8k chars
+
+  const systemPrompt = `You are an expert DevFlow Studio debug assistant. Analyze build/migration errors and provide fix commands.
+Output ONLY valid JSON with the fix instructions. Format:
+{
+  "analysis": "brief cause analysis",
+  "fixCommands": ["command1", "command2"],
+  "fileEdits": [{"path": "relative/path", "search": "text to find", "replace": "new text"}]
+}
+Focus on Flask/FastAPI/Django migration issues, Python syntax errors, and missing dependencies.`;
+
+  const userPrompt = `Project: ${projectPath}
+Framework: ${framework}
+Settings: ${JSON.stringify(settings)}
+
+Error logs:
+${logText}
+
+Provide fix commands and any file edits needed.`;
+
+  try {
+    const response = await new Promise((resolve, reject) => {
+      const url = new URL(apiEndpoint);
+      const options = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+      };
+
+      const req = https.request(options, (res) => {
+        let data = "";
+        res.on("data", (chunk) => data += chunk);
+        res.on("end", () => resolve({ status: res.statusCode, body: data }));
+      });
+
+      req.on("error", reject);
+      req.write(JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        temperature: 0.3,
+        max_tokens: 2000,
+      }));
+      req.end();
+    });
+
+    if (response.status !== 200) {
+      send("log", `  [ai] API error: ${response.status}`);
+      return false;
+    }
+
+    const result = JSON.parse(response.body);
+    const aiResponse = result.choices?.[0]?.message?.content || "";
+    send("log", `  [ai] Analysis: ${aiResponse.slice(0, 200)}...`);
+
+    // Parse the JSON from AI response
+    let fixPlan;
+    try {
+      // Extract JSON from potential markdown code block
+      const jsonMatch = aiResponse.match(/```json\n([\s\S]*?)```/) || aiResponse.match(/\{[\s\S]*\}/);
+      fixPlan = JSON.parse(jsonMatch ? jsonMatch[1] || jsonMatch[0] : aiResponse);
+    } catch (e) {
+      send("log", "  [ai] Could not parse AI response");
+      return false;
+    }
+
+    if (!fixPlan?.fixCommands?.length && !fixPlan?.fileEdits?.length) {
+      send("log", "  [ai] No fixes provided by AI");
+      return false;
+    }
+
+    // Apply file edits first
+    if (fixPlan.fileEdits?.length) {
+      send("log", `  [ai] Applying ${fixPlan.fileEdits.length} file edit(s)...`);
+      for (const edit of fixPlan.fileEdits) {
+        const filePath = path.join(projectPath, edit.path);
+        if (fs.existsSync(filePath)) {
+          let content = fs.readFileSync(filePath, "utf-8");
+          content = content.replace(edit.search, edit.replace);
+          fs.writeFileSync(filePath, content, "utf-8");
+          send("log", `  [ai] Edited ${edit.path}`);
+        }
+      }
+    }
+
+    // Run fix commands
+    if (fixPlan.fixCommands?.length) {
+      send("log", `  [ai] Running ${fixPlan.fixCommands.length} fix command(s)...`);
+      for (const cmd of fixPlan.fixCommands) {
+        const result = await runCmd(cmd, projectPath, process.env, send);
+        if (result.exitCode !== 0) {
+          send("log", `  [ai] Command failed: ${cmd}`);
+          // Retry once with the agent
+          return agenticFix({ logs, projectPath, framework, settings, send, attemptCount: attemptCount + 1 });
+        }
+      }
+    }
+
+    send("log", "  [ai] Fixes applied successfully!");
+    return true;
+  } catch (err) {
+    send("log", `  [ai] Error: ${err.message}`);
+    return false;
+  }
+}
+
+// ─── Main export: scan logs and run all matching fixes ───────────────────────
+
+async function autoFix({ logs, projectPath, framework, settings, send }) {
+  if (framework !== "Flask") return false; // currently Flask only
+
+  const logText = logs.join("\n");
+  const matched = ERROR_PATTERNS.filter((e) => e.pattern.test(logText));
+
+  if (matched.length === 0) return false;
+
+  send("log", `⚡ Auto-fix: detected ${matched.length} known issue(s)`);
+
+  for (const entry of matched) {
+    send("log", `⚡ ${entry.description}`);
+    try {
+      await entry.fix({ projectPath, framework, settings, send, logs });
+    } catch (err) {
+      send("log", `  [fix] Fix failed: ${err.message}`);
+    }
+  }
+
+  // If fixes applied but still have errors, try AI as final fallback
+  const stillFailing = matched.length > 0 && await checkStillFailing({ projectPath, framework, settings, send });
+  if (stillFailing) {
+    send("log", "⚡ Hardcoded fixes applied but errors persist. Trying AI...");
+    const aiFixed = await agenticFix({ logs, projectPath, framework, settings, send });
+    if (aiFixed) return true;
+  }
+
+  return true;
+}
+
+// Helper to check if build/migration still has errors after fixes
+async function checkStillFailing({ projectPath, framework, settings, send }) {
+  const envVars = buildEnvVars(projectPath, settings);
+  const isWin = os.platform() === "win32";
+  const shell = isWin ? "cmd.exe" : (process.env.SHELL || "bash");
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const cmd = framework === "Flask" ? "flask db upgrade" : "python manage.py migrate";
+      const args = isWin ? ["/c", cmd] : ["-c", cmd];
+      const proc = pty.spawn(shell, args, { cwd: projectPath, env: envVars, cols: 120, rows: 30, useConpty: false });
+      let output = "";
+      proc.onData((d) => { output += d.replace(/\x1b\[[0-9;?]*[a-zA-Z]/g, ""); });
+      proc.onExit(({ exitCode }) => resolve({ exitCode, output }));
+    });
+    return result.exitCode !== 0;
+  } catch {
+    return true;
+  }
+}
+
+module.exports = { autoFix, agenticFix };

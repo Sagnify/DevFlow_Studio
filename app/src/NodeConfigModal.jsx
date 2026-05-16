@@ -436,6 +436,67 @@ function EndpointPreview({ data, availableFields }) {
   );
 }
 
+// Key-Value editor for manual output (auto-converts to JSON)
+function OutputKVEditor({ value = [], onChange }) {
+  const add = () => onChange([...value, { id: Math.random(), key: "", val: "" }]);
+  const remove = (id) => onChange(value.filter((r) => r.id !== id));
+  const update = (id, field, v) => onChange(value.map((r) => r.id === id ? { ...r, [field]: v } : r));
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      {value.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 20px", gap: 4, padding: "0 2px" }}>
+          {["Key", "Value", ""].map((h) => (
+            <div key={h} style={{ fontSize: 10, color: "#4b5563", fontWeight: 600, textTransform: "uppercase", letterSpacing: 0.8 }}>{h}</div>
+          ))}
+        </div>
+      )}
+      {value.map((row) => (
+        <div key={row.id} style={{ display: "grid", gridTemplateColumns: "1fr 1fr 20px", gap: 4, alignItems: "center" }}>
+          <input value={row.key} onChange={(e) => update(row.id, "key", e.target.value)} placeholder="fieldName"
+            style={{ ...inputStyle, fontFamily: "monospace" }} />
+          <input value={row.val} onChange={(e) => update(row.id, "val", e.target.value)} placeholder="value"
+            style={{ ...inputStyle, fontFamily: "monospace" }} />
+          <button onClick={() => remove(row.id)} style={delBtn}><Trash2 size={11} color="#4b5563" strokeWidth={1.8} /></button>
+        </div>
+      ))}
+      <button onClick={add} style={{ ...addRowBtn, marginTop: 2 }}>
+        <Plus size={12} strokeWidth={1.8} /> Add field
+      </button>
+    </div>
+  );
+}
+
+// Preview for manual output
+function ManualOutputPreview({ data }) {
+  const outputMode = data.outputMode || "logic";
+  if (outputMode !== "manual") return null;
+
+  const manualOutput = data.manualOutput || { type: "kv", fields: [], content: "{}" };
+  let preview = {};
+
+  if (manualOutput.type === "kv") {
+    (manualOutput.fields || []).forEach(f => {
+      if (f.key) preview[f.key] = f.val || "";
+    });
+  } else {
+    try {
+      preview = JSON.parse(manualOutput.content || "{}");
+    } catch {
+      preview = { error: "Invalid JSON" };
+    }
+  }
+
+  return (
+    <div style={{ background: "#0a0c12", border: "1px solid #34d39922", borderRadius: 7, padding: "12px 14px", marginTop: 8 }}>
+      <div style={{ fontSize: 10, color: "#4b5563", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Manual Output Preview</div>
+      <pre style={{ margin: 0, fontSize: 11, color: "#34d399", fontFamily: "monospace", lineHeight: 1.7, overflowX: "auto", whiteSpace: "pre-wrap", wordBreak: "break-all" }}>
+        {JSON.stringify(preview, null, 2)}
+      </pre>
+    </div>
+  );
+}
+
 function EndpointEditor({ data, onChange, allNodes, edges, nodeId }) {
   const [tab, setTab] = React.useState("config");
   // Response logic nodes: logic results that flow back INTO this endpoint
@@ -460,6 +521,13 @@ function EndpointEditor({ data, onChange, allNodes, edges, nodeId }) {
     onChange({ ...data, outputFields: next });
   };
 
+  // Output mode: logic vs manual
+  const outputMode = data.outputMode || "logic";
+  const manualOutput = data.manualOutput || { type: "kv", fields: [], content: "{}" };
+
+  const setOutputMode = (mode) => onChange({ ...data, outputMode: mode });
+  const setManualOutput = (patch) => onChange({ ...data, manualOutput: { ...manualOutput, ...patch } });
+
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       {/* Tab switcher */}
@@ -474,7 +542,8 @@ function EndpointEditor({ data, onChange, allNodes, edges, nodeId }) {
         ))}
       </div>
 
-      {tab === "preview" && <EndpointPreview data={data} availableFields={availableFields} />}
+      {tab === "preview" && outputMode === "manual" && <ManualOutputPreview data={data} />}
+      {tab === "preview" && outputMode === "logic" && <EndpointPreview data={data} availableFields={availableFields} />}
 
       {tab === "config" && <>
         <div style={{ display: "flex", gap: 8 }}>
@@ -502,27 +571,87 @@ function EndpointEditor({ data, onChange, allNodes, edges, nodeId }) {
           <KVEditor value={data.input || []} onChange={(v) => onChange({ ...data, input: v })} keyPlaceholder="param" />
         </div>
 
+        {/* Output mode switch */}
         <div>
-          <label style={labelStyle}>Response fields</label>
-          <div style={{ fontSize: 11, color: "#4b5563", marginBottom: 6 }}>Fields returned from upstream logic nodes connected to this endpoint.</div>
-          {availableFields.length === 0
-            ? <div style={{ fontSize: 12, color: "#374151", padding: "8px 0" }}>Connect Logic nodes (as input) to pick response fields.</div>
-            : <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                {availableFields.map(({ field, source }) => {
-                  const active = selectedOutput.includes(field);
-                  return (
-                    <div key={field} onClick={() => toggleOutput(field)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                        background: active ? "#0a1f16" : "#1a1d27",
-                        border: `1px solid ${active ? "#05966966" : "#2e303a"}`,
-                        transition: "all 0.1s" }}>
-                      <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "#34d399" : "#374151", flexShrink: 0 }} />
-                      <span style={{ fontSize: 11, fontFamily: "monospace", color: active ? "#34d399" : "#d1d5db", flex: 1 }}>{field}</span>
-                      <span style={{ fontSize: 10, color: "#374151" }}>from {source}</span>
-                    </div>
-                  );
-                })}
-              </div>}
+          <label style={labelStyle}>Response output</label>
+          <div style={{ display: "flex", gap: 2, background: "#0f1117", borderRadius: 7, padding: 3, marginBottom: 12 }}>
+            {[
+              { id: "logic", label: "From Logic Nodes" },
+              { id: "manual", label: "Manual Output" },
+            ].map((opt) => (
+              <button key={opt.id} onClick={() => setOutputMode(opt.id)}
+                style={{ padding: "6px 14px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 11, fontWeight: 500,
+                  background: outputMode === opt.id ? "#1e2030" : "transparent",
+                  color: outputMode === opt.id ? "#f3f4f6" : "#4b5563", transition: "all 0.15s" }}>
+                {opt.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Manual output editor */}
+          {outputMode === "manual" && (
+            <div style={{ padding: "12px", background: "#0a0c12", borderRadius: 8, border: "1px solid #2e303a" }}>
+              {/* Editor type switch */}
+              <div style={{ display: "flex", gap: 2, marginBottom: 12 }}>
+                {[
+                  { id: "kv", label: "Key-Value Editor" },
+                  { id: "json", label: "Raw JSON" },
+                ].map((opt) => (
+                  <button key={opt.id} onClick={() => setManualOutput({ type: opt.id })}
+                    style={{ padding: "4px 12px", borderRadius: 5, border: "none", cursor: "pointer", fontSize: 10, fontWeight: 500,
+                      background: manualOutput.type === opt.id ? "#1e2030" : "transparent",
+                      color: manualOutput.type === opt.id ? "#f3f4f6" : "#4b5563", transition: "all 0.15s" }}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Key-Value editor */}
+              {manualOutput.type === "kv" && (
+                <>
+                  <div style={{ fontSize: 10, color: "#4b5563", marginBottom: 6 }}>Add key-value pairs that will be converted to JSON response.</div>
+                  <OutputKVEditor value={manualOutput.fields || []} onChange={(fields) => setManualOutput({ fields })} />
+                </>
+              )}
+
+              {/* Raw JSON editor */}
+              {manualOutput.type === "json" && (
+                <>
+                  <div style={{ fontSize: 10, color: "#4b5563", marginBottom: 6 }}>Write raw JSON to be returned as the response.</div>
+                  <textarea value={manualOutput.content || ""} onChange={(e) => setManualOutput({ content: e.target.value })}
+                    placeholder='{"message": "Hello World"}'
+                    rows={6}
+                    style={{ ...taStyle, fontFamily: "monospace", fontSize: 12 }} />
+                  <div style={{ fontSize: 10, color: "#4b5563", marginTop: 4 }}>Valid JSON required.</div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Logic-based output (original behavior) */}
+          {outputMode === "logic" && (
+            <div>
+              <div style={{ fontSize: 11, color: "#4b5563", marginBottom: 6 }}>Fields returned from upstream logic nodes connected to this endpoint.</div>
+              {availableFields.length === 0
+                ? <div style={{ fontSize: 12, color: "#374151", padding: "8px 0" }}>Connect Logic nodes (as input) to pick response fields.</div>
+                : <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {availableFields.map(({ field, source }) => {
+                      const active = selectedOutput.includes(field);
+                      return (
+                        <div key={field} onClick={() => toggleOutput(field)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", borderRadius: 6, cursor: "pointer",
+                            background: active ? "#0a1f16" : "#1a1d27",
+                            border: `1px solid ${active ? "#05966966" : "#2e303a"}`,
+                            transition: "all 0.1s" }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? "#34d399" : "#374151", flexShrink: 0 }} />
+                          <span style={{ fontSize: 11, fontFamily: "monospace", color: active ? "#34d399" : "#d1d5db", flex: 1 }}>{field}</span>
+                          <span style={{ fontSize: 10, color: "#374151" }}>from {source}</span>
+                        </div>
+                      );
+                    })}
+                  </div>}
+            </div>
+          )}
         </div>
       </>}
     </div>

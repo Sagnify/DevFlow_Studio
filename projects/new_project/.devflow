@@ -10,20 +10,20 @@
   },
   "nodes": [
     {
-      "id": "task_db_1",
+      "id": "user_db_1",
       "type": "db",
       "position": {
         "x": 80,
         "y": 100
       },
       "data": {
-        "label": "tasks",
+        "label": "users",
         "editing": false,
         "dbType": "sql",
-        "tableName": "tasks",
+        "tableName": "users",
         "fields": [
           {
-            "id": 0.1,
+            "id": 0.11,
             "name": "id",
             "type": "INT",
             "primaryKey": true,
@@ -33,7 +33,79 @@
             "ref": ""
           },
           {
+            "id": 0.12,
+            "name": "username",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": true,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.13,
+            "name": "email",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": true,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.14,
+            "name": "password",
+            "type": "VARCHAR",
+            "primaryKey": false,
+            "required": true,
+            "unique": false,
+            "defaultValue": "",
+            "ref": ""
+          }
+        ],
+        "indexes": []
+      },
+      "width": 100,
+      "height": 90
+    },
+    {
+      "id": "task_db_1",
+      "type": "db",
+      "position": {
+        "x": 94.68990447003478,
+        "y": 357.5354591743029
+      },
+      "data": {
+        "label": "tasks",
+        "editing": false,
+        "dbType": "sql",
+        "tableName": "tasks",
+        "fields": [
+          {
             "id": 0.2,
+            "name": "id",
+            "type": "INT",
+            "primaryKey": true,
+            "required": false,
+            "unique": true,
+            "defaultValue": "",
+            "ref": ""
+          },
+          {
+            "id": 0.21,
+            "name": "user_id",
+            "type": "INT",
+            "primaryKey": false,
+            "required": true,
+            "unique": false,
+            "defaultValue": "",
+            "ref": "users",
+            "isForeignKey": true,
+            "fkRef": "users.id",
+            "fkEdgeId": "rel_user_tasks"
+          },
+          {
+            "id": 0.3,
             "name": "title",
             "type": "VARCHAR",
             "primaryKey": false,
@@ -43,7 +115,7 @@
             "ref": ""
           },
           {
-            "id": 0.3,
+            "id": 0.4,
             "name": "description",
             "type": "TEXT",
             "primaryKey": false,
@@ -53,7 +125,7 @@
             "ref": ""
           },
           {
-            "id": 0.4,
+            "id": 0.5,
             "name": "status",
             "type": "VARCHAR",
             "primaryKey": false,
@@ -63,7 +135,7 @@
             "ref": ""
           },
           {
-            "id": 0.5,
+            "id": 0.6,
             "name": "priority",
             "type": "VARCHAR",
             "primaryKey": false,
@@ -73,7 +145,7 @@
             "ref": ""
           },
           {
-            "id": 0.6,
+            "id": 0.7,
             "name": "due_date",
             "type": "DATETIME",
             "primaryKey": false,
@@ -83,7 +155,7 @@
             "ref": ""
           },
           {
-            "id": 0.7,
+            "id": 0.8,
             "name": "completed_at",
             "type": "DATETIME",
             "primaryKey": false,
@@ -93,7 +165,7 @@
             "ref": ""
           },
           {
-            "id": 0.8,
+            "id": 0.9,
             "name": "created_at",
             "type": "DATETIME",
             "primaryKey": false,
@@ -103,7 +175,7 @@
             "ref": ""
           },
           {
-            "id": 0.9,
+            "id": 1,
             "name": "updated_at",
             "type": "DATETIME",
             "primaryKey": false,
@@ -116,14 +188,208 @@
         "indexes": []
       },
       "width": 100,
-      "height": 90
+      "height": 90,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 94.68990447003478,
+        "y": 357.5354591743029
+      },
+      "dragging": false
+    },
+    {
+      "id": "ep_signup",
+      "type": "endpoint",
+      "position": {
+        "x": 380,
+        "y": 140
+      },
+      "data": {
+        "label": "signUp",
+        "method": "POST",
+        "route": "/auth/signup",
+        "editing": false,
+        "input": [
+          {
+            "id": 101,
+            "key": "username",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 102,
+            "key": "email",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 103,
+            "key": "password",
+            "val": "string",
+            "source": "body"
+          }
+        ],
+        "outputFields": [
+          "id",
+          "username",
+          "email",
+          "password"
+        ]
+      },
+      "width": 162,
+      "height": 111,
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "ep_login",
+      "type": "endpoint",
+      "position": {
+        "x": 540,
+        "y": 140
+      },
+      "data": {
+        "label": "login",
+        "method": "POST",
+        "route": "/auth/login",
+        "editing": false,
+        "input": [
+          {
+            "id": 104,
+            "key": "username",
+            "val": "string",
+            "source": "body"
+          },
+          {
+            "id": 105,
+            "key": "password",
+            "val": "string",
+            "source": "body"
+          }
+        ],
+        "outputFields": [
+          "hashedPassword",
+          "jwt"
+        ]
+      },
+      "width": 162,
+      "height": 111,
+      "selected": false,
+      "dragging": false
+    },
+    {
+      "id": "grp_auth",
+      "type": "group",
+      "position": {
+        "x": 360,
+        "y": 240
+      },
+      "width": 382,
+      "height": 315,
+      "style": {
+        "width": 382,
+        "height": 315
+      },
+      "zIndex": -1,
+      "data": {
+        "label": "Authentication Logic",
+        "color": "#059669"
+      }
+    },
+    {
+      "id": "logic_save_user",
+      "type": "logic",
+      "parentNode": "grp_auth",
+      "position": {
+        "x": 20,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "createUser",
+        "logicType": "Function",
+        "operation": "save",
+        "saveCfg": {
+          "modelId": "user_db_1",
+          "saveOp": "create",
+          "mapping": {
+            "username": {
+              "mode": "upstream",
+              "val": "username"
+            },
+            "email": {
+              "mode": "upstream",
+              "val": "email"
+            },
+            "password": {
+              "mode": "upstream",
+              "val": "password"
+            }
+          }
+        }
+      },
+      "width": 195,
+      "height": 115
+    },
+    {
+      "id": "logic_auth_basic",
+      "type": "logic",
+      "parentNode": "grp_auth",
+      "position": {
+        "x": 180,
+        "y": 40
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "verifyCredentials",
+        "logicType": "Function",
+        "operation": "auth_basic",
+        "authBasicCfg": {
+          "usernameField": "username",
+          "passwordField": "password",
+          "modelId": "user_db_1"
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "logic_auth_jwt",
+      "type": "logic",
+      "parentNode": "grp_auth",
+      "position": {
+        "x": 180,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "generateToken",
+        "logicType": "Function",
+        "operation": "auth_advanced",
+        "authAdvCfg": {
+          "hashField": "password",
+          "jwtPayloadFields": [
+            "userId"
+          ],
+          "jwtExpiry": "24h"
+        }
+      },
+      "width": 142,
+      "height": 115,
+      "selected": true,
+      "dragging": false
     },
     {
       "id": "ep_list_tasks",
       "type": "endpoint",
       "position": {
-        "x": 385.04869658139756,
-        "y": -6.412200860528117
+        "x": 760,
+        "y": 140
       },
       "data": {
         "label": "listTasks",
@@ -133,13 +399,13 @@
         "input": [
           {
             "id": 1.1,
-            "key": "status",
+            "key": "token",
             "val": "string",
-            "source": "query"
+            "source": "header"
           },
           {
             "id": 1.2,
-            "key": "priority",
+            "key": "status",
             "val": "string",
             "source": "query"
           }
@@ -151,24 +417,20 @@
       "width": 162,
       "height": 111,
       "selected": false,
-      "positionAbsolute": {
-        "x": 385.04869658139756,
-        "y": -6.412200860528117
-      },
       "dragging": false
     },
     {
       "id": "grp_list",
       "type": "group",
       "position": {
-        "x": 360,
+        "x": 740,
         "y": 240
       },
-      "width": 390.29217948838516,
-      "height": 350.34087606978267,
+      "width": 320,
+      "height": 435,
       "style": {
-        "width": 390.29217948838516,
-        "height": 350.34087606978267
+        "width": 320,
+        "height": 435
       },
       "zIndex": -1,
       "data": {
@@ -177,18 +439,44 @@
       }
     },
     {
-      "id": "logic_fetch_all",
+      "id": "logic_auth_list",
       "type": "logic",
       "parentNode": "grp_list",
       "position": {
-        "x": 70.29217948838516,
-        "y": 32.93182478604348
+        "x": 70,
+        "y": 40
       },
       "extent": "parent",
       "expandParent": false,
       "zIndex": 1,
       "data": {
-        "label": "fetchTasks",
+        "label": "authUserList",
+        "logicType": "Function",
+        "operation": "auth_advanced",
+        "authAdvCfg": {
+          "hashField": "token",
+          "jwtPayloadFields": [
+            "userId"
+          ],
+          "jwtExpiry": "24h"
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "logic_fetch_all",
+      "type": "logic",
+      "parentNode": "grp_list",
+      "position": {
+        "x": 70,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "fetchUserTasks",
         "logicType": "Function",
         "operation": "fetch",
         "fetchCfg": {
@@ -203,20 +491,20 @@
           "filters": [
             {
               "id": 2.1,
+              "field": "user_id",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "userId"
+              }
+            },
+            {
+              "id": 2.2,
               "field": "status",
               "op": "is",
               "value": {
                 "mode": "upstream",
                 "val": "status"
-              }
-            },
-            {
-              "id": 2.2,
-              "field": "priority",
-              "op": "is",
-              "value": {
-                "mode": "upstream",
-                "val": "priority"
               }
             }
           ],
@@ -224,21 +512,15 @@
         }
       },
       "width": 240,
-      "height": 115,
-      "selected": false,
-      "positionAbsolute": {
-        "x": 430.29217948838516,
-        "y": 272.9318247860435
-      },
-      "dragging": false
+      "height": 115
     },
     {
       "id": "logic_sort_tasks",
       "type": "logic",
       "parentNode": "grp_list",
       "position": {
-        "x": 0,
-        "y": 188.27270085582614
+        "x": 70,
+        "y": 280
       },
       "extent": "parent",
       "expandParent": false,
@@ -252,112 +534,13 @@
         }
       },
       "width": 142,
-      "height": 115,
-      "selected": true,
-      "positionAbsolute": {
-        "x": 360,
-        "y": 428.27270085582614
-      },
-      "dragging": false
-    },
-    {
-      "id": "ep_get_task",
-      "type": "endpoint",
-      "position": {
-        "x": 620,
-        "y": 140
-      },
-      "data": {
-        "label": "getTask",
-        "method": "GET",
-        "route": "/tasks/:id",
-        "editing": false,
-        "input": [
-          {
-            "id": 3.1,
-            "key": "id",
-            "val": "string",
-            "source": "path"
-          }
-        ],
-        "outputFields": [
-          "id",
-          "title",
-          "description",
-          "status",
-          "priority",
-          "due_date"
-        ]
-      },
-      "width": 162,
-      "height": 111
-    },
-    {
-      "id": "grp_get",
-      "type": "group",
-      "position": {
-        "x": 600,
-        "y": 240
-      },
-      "width": 391,
-      "height": 195,
-      "style": {
-        "width": 391,
-        "height": 195
-      },
-      "zIndex": -1,
-      "data": {
-        "label": "Get Logic",
-        "color": "#059669"
-      }
-    },
-    {
-      "id": "logic_fetch_one",
-      "type": "logic",
-      "parentNode": "grp_get",
-      "position": {
-        "x": 40,
-        "y": 40
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "fetchTaskById",
-        "logicType": "Function",
-        "operation": "fetch",
-        "fetchCfg": {
-          "modelId": "task_db_1",
-          "fetchFields": [
-            "id",
-            "title",
-            "description",
-            "status",
-            "priority",
-            "due_date"
-          ],
-          "filters": [
-            {
-              "id": 4.1,
-              "field": "id",
-              "op": "is",
-              "value": {
-                "mode": "upstream",
-                "val": "id"
-              }
-            }
-          ],
-          "returnMany": false
-        }
-      },
-      "width": 311,
       "height": 115
     },
     {
       "id": "ep_create_task",
       "type": "endpoint",
       "position": {
-        "x": 860,
+        "x": 1150,
         "y": 140
       },
       "data": {
@@ -368,28 +551,28 @@
         "input": [
           {
             "id": 5.1,
+            "key": "token",
+            "val": "string",
+            "source": "header"
+          },
+          {
+            "id": 5.2,
             "key": "title",
             "val": "string",
             "source": "body"
           },
           {
-            "id": 5.2,
-            "key": "description",
-            "val": "string",
-            "source": "body"
-          },
-          {
             "id": 5.3,
-            "key": "due_date",
+            "key": "description",
             "val": "string",
             "source": "body"
           }
         ],
         "outputFields": [
           "id",
+          "user_id",
           "title",
-          "description",
-          "due_date"
+          "description"
         ]
       },
       "width": 162,
@@ -399,14 +582,14 @@
       "id": "grp_create",
       "type": "group",
       "position": {
-        "x": 840,
+        "x": 1130,
         "y": 240
       },
-      "width": 290,
-      "height": 435,
+      "width": 285,
+      "height": 315,
       "style": {
-        "width": 290,
-        "height": 435
+        "width": 285,
+        "height": 315
       },
       "zIndex": -1,
       "data": {
@@ -415,7 +598,7 @@
       }
     },
     {
-      "id": "logic_val_title",
+      "id": "logic_auth_create",
       "type": "logic",
       "parentNode": "grp_create",
       "position": {
@@ -426,52 +609,18 @@
       "expandParent": false,
       "zIndex": 1,
       "data": {
-        "label": "validateTitle",
+        "label": "authUserCreate",
         "logicType": "Function",
-        "operation": "validate",
-        "validateCfg": {
-          "field": "title",
-          "rules": [
-            {
-              "id": 6.1,
-              "type": "required",
-              "ruleVal": "",
-              "onFail": "Title is required"
-            }
-          ]
+        "operation": "auth_advanced",
+        "authAdvCfg": {
+          "hashField": "token",
+          "jwtPayloadFields": [
+            "userId"
+          ],
+          "jwtExpiry": "24h"
         }
       },
       "width": 142,
-      "height": 115
-    },
-    {
-      "id": "logic_val_date_create",
-      "type": "logic",
-      "parentNode": "grp_create",
-      "position": {
-        "x": 40,
-        "y": 160
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "validateDueDate",
-        "logicType": "Function",
-        "operation": "validate",
-        "validateCfg": {
-          "field": "due_date",
-          "rules": [
-            {
-              "id": 6.2,
-              "type": "is number",
-              "ruleVal": "",
-              "onFail": "Due date must be a valid date and not in the past"
-            }
-          ]
-        }
-      },
-      "width": 161,
       "height": 115
     },
     {
@@ -480,19 +629,23 @@
       "parentNode": "grp_create",
       "position": {
         "x": 40,
-        "y": 280
+        "y": 160
       },
       "extent": "parent",
       "expandParent": false,
       "zIndex": 1,
       "data": {
-        "label": "saveTaskCreate",
+        "label": "saveUserTask",
         "logicType": "Function",
         "operation": "save",
         "saveCfg": {
           "modelId": "task_db_1",
           "saveOp": "create",
           "mapping": {
+            "user_id": {
+              "mode": "upstream",
+              "val": "userId"
+            },
             "title": {
               "mode": "upstream",
               "val": "title"
@@ -500,145 +653,18 @@
             "description": {
               "mode": "upstream",
               "val": "description"
-            },
-            "due_date": {
-              "mode": "upstream",
-              "val": "due_date"
             }
           }
         }
       },
-      "width": 210,
-      "height": 115
-    },
-    {
-      "id": "ep_update_task",
-      "type": "endpoint",
-      "position": {
-        "x": 1100,
-        "y": 140
-      },
-      "data": {
-        "label": "updateTask",
-        "method": "PUT",
-        "route": "/tasks/:id",
-        "editing": false,
-        "input": [
-          {
-            "id": 7.1,
-            "key": "id",
-            "val": "string",
-            "source": "path"
-          },
-          {
-            "id": 7.2,
-            "key": "title",
-            "val": "string",
-            "source": "body"
-          },
-          {
-            "id": 7.3,
-            "key": "due_date",
-            "val": "string",
-            "source": "body"
-          }
-        ],
-        "outputFields": [
-          "id",
-          "title",
-          "due_date"
-        ]
-      },
-      "width": 162,
-      "height": 111
-    },
-    {
-      "id": "grp_update",
-      "type": "group",
-      "position": {
-        "x": 1080,
-        "y": 240
-      },
-      "width": 241,
-      "height": 315,
-      "style": {
-        "width": 241,
-        "height": 315
-      },
-      "zIndex": -1,
-      "data": {
-        "label": "Update Logic",
-        "color": "#059669"
-      }
-    },
-    {
-      "id": "logic_val_date_update",
-      "type": "logic",
-      "parentNode": "grp_update",
-      "position": {
-        "x": 40,
-        "y": 40
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "validateDateUpdate",
-        "logicType": "Function",
-        "operation": "validate",
-        "validateCfg": {
-          "field": "due_date",
-          "rules": [
-            {
-              "id": 8.1,
-              "type": "is number",
-              "ruleVal": "",
-              "onFail": "Due date cannot be in the past"
-            }
-          ]
-        }
-      },
-      "width": 161,
-      "height": 115
-    },
-    {
-      "id": "logic_save_update",
-      "type": "logic",
-      "parentNode": "grp_update",
-      "position": {
-        "x": 40,
-        "y": 160
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "saveTaskUpdate",
-        "logicType": "Function",
-        "operation": "save",
-        "saveCfg": {
-          "modelId": "task_db_1",
-          "saveOp": "update",
-          "mapping": {
-            "title": {
-              "mode": "upstream",
-              "val": "title"
-            },
-            "due_date": {
-              "mode": "upstream",
-              "val": "due_date"
-            }
-          }
-        }
-      },
-      "width": 142,
+      "width": 205,
       "height": 115
     },
     {
       "id": "ep_delete_task",
       "type": "endpoint",
       "position": {
-        "x": 1340,
+        "x": 1430,
         "y": 140
       },
       "data": {
@@ -649,6 +675,12 @@
         "input": [
           {
             "id": 9.1,
+            "key": "token",
+            "val": "string",
+            "source": "header"
+          },
+          {
+            "id": 9.2,
             "key": "id",
             "val": "string",
             "source": "path"
@@ -665,14 +697,14 @@
       "id": "grp_delete",
       "type": "group",
       "position": {
-        "x": 1320,
+        "x": 1410,
         "y": 240
       },
       "width": 222,
-      "height": 195,
+      "height": 315,
       "style": {
         "width": 222,
-        "height": 195
+        "height": 315
       },
       "zIndex": -1,
       "data": {
@@ -681,7 +713,7 @@
       }
     },
     {
-      "id": "logic_delete_op",
+      "id": "logic_auth_delete",
       "type": "logic",
       "parentNode": "grp_delete",
       "position": {
@@ -692,7 +724,33 @@
       "expandParent": false,
       "zIndex": 1,
       "data": {
-        "label": "deleteTaskOp",
+        "label": "authUserDelete",
+        "logicType": "Function",
+        "operation": "auth_advanced",
+        "authAdvCfg": {
+          "hashField": "token",
+          "jwtPayloadFields": [
+            "userId"
+          ],
+          "jwtExpiry": "24h"
+        }
+      },
+      "width": 142,
+      "height": 115
+    },
+    {
+      "id": "logic_delete_op",
+      "type": "logic",
+      "parentNode": "grp_delete",
+      "position": {
+        "x": 40,
+        "y": 160
+      },
+      "extent": "parent",
+      "expandParent": false,
+      "zIndex": 1,
+      "data": {
+        "label": "deleteOwnedTask",
         "logicType": "Function",
         "operation": "delete",
         "deleteCfg": {
@@ -706,136 +764,151 @@
                 "mode": "upstream",
                 "val": "id"
               }
-            }
-          ]
-        }
-      },
-      "width": 142,
-      "height": 115
-    },
-    {
-      "id": "ep_patch_status",
-      "type": "endpoint",
-      "position": {
-        "x": 1580,
-        "y": 140
-      },
-      "data": {
-        "label": "updateStatus",
-        "method": "PATCH",
-        "route": "/tasks/:id/status",
-        "editing": false,
-        "input": [
-          {
-            "id": 11.1,
-            "key": "id",
-            "val": "string",
-            "source": "path"
-          },
-          {
-            "id": 11.2,
-            "key": "status",
-            "val": "string",
-            "source": "body"
-          }
-        ],
-        "outputFields": [
-          "id",
-          "status",
-          "completed_at"
-        ]
-      },
-      "width": 165,
-      "height": 111
-    },
-    {
-      "id": "grp_patch",
-      "type": "group",
-      "position": {
-        "x": 1560,
-        "y": 240
-      },
-      "width": 245,
-      "height": 315,
-      "style": {
-        "width": 245,
-        "height": 315
-      },
-      "zIndex": -1,
-      "data": {
-        "label": "Patch Logic",
-        "color": "#059669"
-      }
-    },
-    {
-      "id": "logic_status_transform",
-      "type": "logic",
-      "parentNode": "grp_patch",
-      "position": {
-        "x": 40,
-        "y": 40
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "handleCompletedAt",
-        "logicType": "Function",
-        "operation": "transform",
-        "transformCfg": {
-          "rows": [
-            {
-              "id": 12.1,
-              "inputField": "status",
-              "op": "Rename",
-              "opConfig": "completed_at",
-              "outputName": "completed_at"
-            }
-          ]
-        }
-      },
-      "width": 142,
-      "height": 115
-    },
-    {
-      "id": "logic_save_status",
-      "type": "logic",
-      "parentNode": "grp_patch",
-      "position": {
-        "x": 40,
-        "y": 160
-      },
-      "extent": "parent",
-      "expandParent": false,
-      "zIndex": 1,
-      "data": {
-        "label": "saveStatusUpdate",
-        "logicType": "Function",
-        "operation": "save",
-        "saveCfg": {
-          "modelId": "task_db_1",
-          "saveOp": "update",
-          "mapping": {
-            "status": {
-              "mode": "upstream",
-              "val": "status"
             },
-            "completed_at": {
-              "mode": "upstream",
-              "val": "completed_at"
+            {
+              "id": 10.2,
+              "field": "user_id",
+              "op": "is",
+              "value": {
+                "mode": "upstream",
+                "val": "userId"
+              }
             }
-          }
+          ]
         }
       },
-      "width": 165,
+      "width": 142,
       "height": 115
+    },
+    {
+      "id": "1778958399279",
+      "position": {
+        "x": 951.4982148075994,
+        "y": 39.13379383550597
+      },
+      "data": {
+        "label": "homeAPI",
+        "method": "GET",
+        "route": "/",
+        "editing": false,
+        "outputMode": "manual",
+        "inputsOptional": false,
+        "manualOutput": {
+          "type": "kv",
+          "fields": [
+            {
+              "id": 0.6842744825966208,
+              "key": "message",
+              "val": "This is the api for the to-do list"
+            }
+          ],
+          "content": "{}"
+        }
+      },
+      "type": "endpoint",
+      "width": 162,
+      "height": 111,
+      "selected": false,
+      "positionAbsolute": {
+        "x": 951.4982148075994,
+        "y": 39.13379383550597
+      },
+      "dragging": false
     }
   ],
   "edges": [
     {
+      "id": "rel_user_tasks",
+      "source": "user_db_1",
+      "sourceHandle": "bottom-s",
+      "target": "task_db_1",
+      "targetHandle": "top-t",
+      "data": {
+        "relation": "1:N"
+      },
+      "label": "1:N",
+      "style": {
+        "stroke": "#059669"
+      },
+      "labelStyle": {
+        "fill": "#34d399",
+        "fontSize": 10,
+        "fontWeight": 600
+      },
+      "labelBgStyle": {
+        "fill": "#0a1f16"
+      }
+    },
+    {
+      "id": "flow_sign_1",
+      "type": "dataflow",
+      "source": "ep_signup",
+      "sourceHandle": "bottom-s",
+      "target": "logic_save_user",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_sign_rev",
+      "type": "dataflow",
+      "source": "logic_save_user",
+      "sourceHandle": "top-s",
+      "target": "ep_signup",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
+      "id": "flow_log_1",
+      "type": "dataflow",
+      "source": "ep_login",
+      "sourceHandle": "bottom-s",
+      "target": "logic_auth_basic",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_log_2",
+      "type": "dataflow",
+      "source": "logic_auth_basic",
+      "sourceHandle": "bottom-s",
+      "target": "logic_auth_jwt",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_log_rev",
+      "type": "dataflow",
+      "source": "logic_auth_jwt",
+      "sourceHandle": "top-s",
+      "target": "ep_login",
+      "targetHandle": "bottom-t",
+      "data": {
+        "flowDir": "reverse"
+      }
+    },
+    {
       "id": "flow_list_1",
       "type": "dataflow",
       "source": "ep_list_tasks",
+      "sourceHandle": "bottom-s",
+      "target": "logic_auth_list",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_list_2",
+      "type": "dataflow",
+      "source": "logic_auth_list",
       "sourceHandle": "bottom-s",
       "target": "logic_fetch_all",
       "targetHandle": "top-t",
@@ -844,7 +917,7 @@
       }
     },
     {
-      "id": "flow_list_2",
+      "id": "flow_list_3",
       "type": "dataflow",
       "source": "logic_fetch_all",
       "sourceHandle": "bottom-s",
@@ -866,33 +939,11 @@
       }
     },
     {
-      "id": "flow_get_1",
-      "type": "dataflow",
-      "source": "ep_get_task",
-      "sourceHandle": "bottom-s",
-      "target": "logic_fetch_one",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
-    },
-    {
-      "id": "flow_get_rev",
-      "type": "dataflow",
-      "source": "logic_fetch_one",
-      "sourceHandle": "top-s",
-      "target": "ep_get_task",
-      "targetHandle": "bottom-t",
-      "data": {
-        "flowDir": "reverse"
-      }
-    },
-    {
       "id": "flow_create_1",
       "type": "dataflow",
       "source": "ep_create_task",
       "sourceHandle": "bottom-s",
-      "target": "logic_val_title",
+      "target": "logic_auth_create",
       "targetHandle": "top-t",
       "data": {
         "flowDir": "forward"
@@ -901,18 +952,7 @@
     {
       "id": "flow_create_2",
       "type": "dataflow",
-      "source": "logic_val_title",
-      "sourceHandle": "bottom-s",
-      "target": "logic_val_date_create",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
-    },
-    {
-      "id": "flow_create_3",
-      "type": "dataflow",
-      "source": "logic_val_date_create",
+      "source": "logic_auth_create",
       "sourceHandle": "bottom-s",
       "target": "logic_save_create",
       "targetHandle": "top-t",
@@ -932,42 +972,20 @@
       }
     },
     {
-      "id": "flow_update_1",
-      "type": "dataflow",
-      "source": "ep_update_task",
-      "sourceHandle": "bottom-s",
-      "target": "logic_val_date_update",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
-    },
-    {
-      "id": "flow_update_2",
-      "type": "dataflow",
-      "source": "logic_val_date_update",
-      "sourceHandle": "bottom-s",
-      "target": "logic_save_update",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
-    },
-    {
-      "id": "flow_update_rev",
-      "type": "dataflow",
-      "source": "logic_save_update",
-      "sourceHandle": "top-s",
-      "target": "ep_update_task",
-      "targetHandle": "bottom-t",
-      "data": {
-        "flowDir": "reverse"
-      }
-    },
-    {
-      "id": "flow_delete_1",
+      "id": "flow_del_1",
       "type": "dataflow",
       "source": "ep_delete_task",
+      "sourceHandle": "bottom-s",
+      "target": "logic_auth_delete",
+      "targetHandle": "top-t",
+      "data": {
+        "flowDir": "forward"
+      }
+    },
+    {
+      "id": "flow_del_2",
+      "type": "dataflow",
+      "source": "logic_auth_delete",
       "sourceHandle": "bottom-s",
       "target": "logic_delete_op",
       "targetHandle": "top-t",
@@ -976,7 +994,7 @@
       }
     },
     {
-      "id": "flow_delete_rev",
+      "id": "flow_del_rev",
       "type": "dataflow",
       "source": "logic_delete_op",
       "sourceHandle": "top-s",
@@ -987,48 +1005,22 @@
       }
     },
     {
-      "id": "flow_patch_1",
-      "type": "dataflow",
-      "source": "ep_patch_status",
-      "sourceHandle": "bottom-s",
-      "target": "logic_status_transform",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
+      "id": "conn_user_db",
+      "source": "logic_save_user",
+      "sourceHandle": "left-s",
+      "target": "user_db_1",
+      "targetHandle": "right-t"
     },
     {
-      "id": "flow_patch_2",
-      "type": "dataflow",
-      "source": "logic_status_transform",
-      "sourceHandle": "bottom-s",
-      "target": "logic_save_status",
-      "targetHandle": "top-t",
-      "data": {
-        "flowDir": "forward"
-      }
-    },
-    {
-      "id": "flow_patch_rev",
-      "type": "dataflow",
-      "source": "logic_save_status",
-      "sourceHandle": "top-s",
-      "target": "ep_patch_status",
-      "targetHandle": "bottom-t",
-      "data": {
-        "flowDir": "reverse"
-      }
+      "id": "conn_auth_db",
+      "source": "logic_auth_basic",
+      "sourceHandle": "left-s",
+      "target": "user_db_1",
+      "targetHandle": "right-t"
     },
     {
       "id": "conn_list_db",
       "source": "logic_fetch_all",
-      "sourceHandle": "left-s",
-      "target": "task_db_1",
-      "targetHandle": "right-t"
-    },
-    {
-      "id": "conn_get_db",
-      "source": "logic_fetch_one",
       "sourceHandle": "left-s",
       "target": "task_db_1",
       "targetHandle": "right-t"
@@ -1041,22 +1033,8 @@
       "targetHandle": "right-t"
     },
     {
-      "id": "conn_update_db",
-      "source": "logic_save_update",
-      "sourceHandle": "left-s",
-      "target": "task_db_1",
-      "targetHandle": "right-t"
-    },
-    {
       "id": "conn_delete_db",
       "source": "logic_delete_op",
-      "sourceHandle": "left-s",
-      "target": "task_db_1",
-      "targetHandle": "right-t"
-    },
-    {
-      "id": "conn_patch_db",
-      "source": "logic_save_status",
       "sourceHandle": "left-s",
       "target": "task_db_1",
       "targetHandle": "right-t"

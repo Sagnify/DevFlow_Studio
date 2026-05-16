@@ -21,7 +21,7 @@ function sortEntries(entries) {
 }
 
 // ── Single tree node ─────────────────────────────────────────────────────────
-function TreeNode({ node, depth, onCtxMenu, clipboard, onRename, renamingPath, onRenameCommit, onRenameCancel }) {
+function TreeNode({ node, depth, onCtxMenu, clipboard, onRename, renamingPath, onRenameCommit, onRenameCancel, onFileOpen }) {
   const [open, setOpen] = useState(depth === 0);
   const inputRef = useRef(null);
   const isRenaming = renamingPath === node.path;
@@ -36,11 +36,17 @@ function TreeNode({ node, depth, onCtxMenu, clipboard, onRename, renamingPath, o
     <div>
       <div
         onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onCtxMenu(e, node); }}
-        onClick={() => node.isDir && setOpen((o) => !o)}
+        onClick={() => {
+          if (node.isDir) {
+            setOpen((o) => !o);
+          } else {
+            onFileOpen?.(node);
+          }
+        }}
         style={{
           display: "flex", alignItems: "center", gap: 4,
           padding: `2px 8px 2px ${8 + depth * 14}px`,
-          cursor: node.isDir ? "pointer" : "default",
+          cursor: "pointer",
           borderRadius: 4, userSelect: "none",
           color: "#d1d5db", fontSize: 12,
           transition: "background 0.1s",
@@ -81,7 +87,8 @@ function TreeNode({ node, depth, onCtxMenu, clipboard, onRename, renamingPath, o
         <TreeNode key={child.path} node={child} depth={depth + 1}
           onCtxMenu={onCtxMenu} clipboard={clipboard}
           onRename={onRename} renamingPath={renamingPath}
-          onRenameCommit={onRenameCommit} onRenameCancel={onRenameCancel} />
+          onRenameCommit={onRenameCommit} onRenameCancel={onRenameCancel}
+          onFileOpen={onFileOpen} />
       ))}
     </div>
   );
@@ -155,7 +162,7 @@ function NewNameInput({ onCommit, onCancel }) {
 }
 
 // ── Main FileExplorer component ───────────────────────────────────────────────
-export default function FileExplorer({ projectPath, visible, onToggle }) {
+export default function FileExplorer({ projectPath, visible, onToggle, onFileOpen }) {
   const [tree, setTree] = useState([]);
   const [ctxMenu, setCtxMenu] = useState(null); // { x, y, node }
   const [clipboard, setClipboard] = useState(null); // { node, cut }
@@ -283,6 +290,7 @@ export default function FileExplorer({ projectPath, visible, onToggle }) {
               onRename={(n) => setRenamingPath(n.path)}
               onRenameCommit={handleRenameCommit}
               onRenameCancel={() => setRenamingPath(null)}
+              onFileOpen={onFileOpen}
             />
           ))}
           {tree.length === 0 && (
