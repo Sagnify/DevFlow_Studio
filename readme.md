@@ -40,7 +40,6 @@ DevFlow behaves more like a **domain-specific backend compiler** than a code gen
 
 * Create and manage projects locally
 * `.devflow` file stores graph structure
-* Project type selection (Frontend / Backend / Fullstack)
 * Auto-restore last opened project
 
 ---
